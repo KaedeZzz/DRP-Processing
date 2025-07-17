@@ -1,0 +1,8 @@
+
+## Measurement parameters
+th_min: 15
+th_max: 66 # min and max elevation angle
+th_num: 18 # number of elevation angle increments during measurement
+ph_min: 0
+ph_max: 354 # min and max azimuth angle
+ph_num: 60 # number of azimuth angle increments during measurement
