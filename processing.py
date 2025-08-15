@@ -6,16 +6,21 @@ background subtraction -- converting image stack into DRP cell
 plotting -- plot DRPs.
 """
 
-import numpy as np
+import yaml
+
 from pathlib import Path
+import numpy as np
 from PIL import Image
 from scipy.signal import wiener
 
-from io import load_images
+from utils import load_images
 
 cwd = Path.cwd()
 
-def drp_loader(exp_param, folder='images', img_format='jpg'):
+with open("config.yaml", 'r') as stream:
+    exp_param = yaml.safe_load(stream)
+
+def drp_loader(folder='images', img_format='jpg'):
     """
     Load sample and background datasets.
     :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
@@ -55,8 +60,8 @@ def drp_loader(exp_param, folder='images', img_format='jpg'):
     th_step = (th_max - th_min) / (th_num - 1)
 
     for i in range(num_images):
-        ph_th_profile[i, 0] = ((indexing[i] - 1) % ph_num) * phi_step
-        ph_th_profile[i, 1] = ((indexing[i] - 1) // ph_num) * th_step + th_min
+        ph_th_profile[i, 0] = ((indexing[i] - 1) // th_num) * phi_step
+        ph_th_profile[i, 1] = ((indexing[i] - 1) % th_num) * th_step + th_min
 
     return images, ph_th_profile
 
@@ -91,3 +96,7 @@ def background_sub(samples: list[Image.Image], backgrounds: list[Image.Image], c
         norm_images.append(Image.fromarray(np.uint8(norm)))
 
     return norm_images
+
+if __name__ == '__main__':
+    images, profile = drp_loader()
+    print(profile)
