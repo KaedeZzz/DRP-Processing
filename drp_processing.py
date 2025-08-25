@@ -111,6 +111,71 @@ def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], c
 
     return norm_images
 
+
+def igrey2drp(samples: list[Image.Image]):
+    """
+    Builds list of images into a 4D DRP dataset of dimensions [w x h x theta x phi].
+    :param samples: List of image samples.
+    :return: A numpy array of dimension 4.
+    """
+    width, height = samples[0].size
+    dataset = np.zeros((width, height, th_num, ph_num))
+    angle_profile = build_angle_profile(len(samples))
+    for i in tqdm(range(len(samples)), desc='building 4D DRP dataset'):
+        phi, theta = angle_profile[i]
+        phi_step = (ph_max - ph_min) / (ph_num - 1)
+        th_step = (th_max - th_min) / (th_num - 1)
+        phi_ind = (phi - ph_min) / phi_step
+        theta_ind = (theta - th_min) / th_step
+        dataset[:, :, phi_ind, theta_ind] = samples[i]
+
+    return dataset
+
+
+def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax = None, scalebar: bool = False):
+    """
+    Returns a matplotlib axis of a DRP in polar coordinates.
+    :param drp_array: 2D dataset in [theta, phi].
+    :param cmap: matplotlib colormap name.
+    :param project: projection method used, either 'stereo' or 'direct'.
+    :param ax: matplotlib axis to draw on.
+    :param scalebar: boolean, whether to display a scalebar on the plot.
+    :return: a matplotlib axis of the DRP in polar coordinates.
+    """
+    # Normalize pixel value into int if they were float in [0,1]
+    if np.issubdtype(drp_array.dtype, np.floating) and drp_array.max() <= 1.0:
+        drp_array = (drp_array * 255).astype(np.uint8)
+
+    th_step = (th_max - th_min) / (th_num - 1)
+    ph_step = 360 / (ph_num - 1)
+
+    # Meshgrid of phi (x-axis), theta (y-axis)
+    phi, theta = np.meshgrid(np.arange(0, 360 + ph_step, ph_step),
+                             np.arange(th_min, th_max + th_step, th_step))
+
+    # Projection mapping
+    if project == "stereo":
+        xx = np.cos(np.radians(theta)) * np.cos(np.radians(phi)) / (1 + np.sin(np.radians(theta)))
+        yy = np.cos(np.radians(theta)) * np.sin(np.radians(phi)) / (1 + np.sin(np.radians(theta)))
+    elif project == "direct":
+        xx = np.cos(np.radians(theta)) * np.cos(np.radians(phi))
+        yy = np.cos(np.radians(theta)) * np.sin(np.radians(phi))
+    else:
+        raise ValueError("Unknown project type. Use 'stereo' or 'direct'.")
+
+    if ax is None:
+        fig, ax = plt.subplots()
+
+    h = ax.pcolormesh(xx, yy, drp_array, cmap=cmap, shading='auto')
+    ax.set_aspect('equal')
+    ax.axis('off')
+
+    if scalebar:
+        plt.colorbar(h, ax=ax)
+
+    return ax
+
+
 if __name__ == '__main__':
     images, profile = drp_loader()
     print(profile)
