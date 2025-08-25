@@ -1,4 +1,4 @@
-from drp_processing import drp_loader, igrey2drp, drp_measure
+from drp_processing import drp_loader, drp_measure
 
 if __name__ == "__main__":
     images, profile = drp_loader()

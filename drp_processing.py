@@ -165,6 +165,8 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
     if ax is None:
         fig, ax = plt.subplots()
 
+    print(drp_array.shape)
+
     h = ax.pcolormesh(xx, yy, drp_array, cmap=cmap, shading='auto')
     ax.set_aspect('equal')
     ax.axis('off')
