@@ -10,8 +10,9 @@ def load_images(path, affix: str) -> list[Image.Image]:
     :return: A list of image objects of class Image.Image.
     """
     images = []
-    for image_path in tqdm(path.glob('*.' + affix), desc='loading images'):
+    for image_path in tqdm(sorted(path.glob('*.' + affix)), desc='loading images'):
         try:
+            print(image_path)
             image = Image.open(image_path)
             images.append(image)
         except IOError:
