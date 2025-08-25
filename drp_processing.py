@@ -112,7 +112,7 @@ def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], c
     return norm_images
 
 
-def igray2drp(samples: list[Image.Image]):
+def igrey2drp(samples: list[Image.Image]):
     """
     Builds list of images into a 4D DRP dataset of dimensions [w x h x theta x phi].
     :param samples: List of image samples.
@@ -174,7 +174,6 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
         plt.colorbar(h, ax=ax)
 
     return ax
-
 
 
 if __name__ == '__main__':
