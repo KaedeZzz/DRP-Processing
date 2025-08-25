@@ -12,7 +12,6 @@ def load_images(path, affix: str) -> list[Image.Image]:
     images = []
     for image_path in tqdm(sorted(path.glob('*.' + affix)), desc='loading images'):
         try:
-            print(image_path)
             image = Image.open(image_path)
             images.append(image)
         except IOError:
