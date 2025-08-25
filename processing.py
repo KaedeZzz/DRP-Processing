@@ -22,12 +22,13 @@ cwd = Path.cwd()
 with open("config.yaml", 'r') as stream:
     exp_param = yaml.safe_load(stream)
 
-def drp_loader(folder='images', img_format='jpg'):
+def drp_loader(folder='images', img_format='jpg', roi: list | np.array = None):
     """
     Load sample and background datasets.
     :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
     :param folder: The folder where the images are saved.
     :param img_format: The image format to load.
+    :param roi: The region of interest.
     :return: a stack of images, and a 2D array of elevation and azimuth angles of each image.
     """
 
@@ -38,6 +39,9 @@ def drp_loader(folder='images', img_format='jpg'):
     ph_min = exp_param['ph_min']
     ph_max = exp_param['ph_max']
     ph_num = exp_param['ph_num']
+
+    if len(roi) != 4:
+        raise ValueError('Region of interest must contain 4 coordinates')
 
     # Set path to load images
     if folder == '':
@@ -54,6 +58,8 @@ def drp_loader(folder='images', img_format='jpg'):
     # Convert all images into greyscale
     for i in tqdm(range(num_images), desc='converting images into greyscale'):
         images[i] = images[i].convert('L')
+        if roi is not None:
+            images[i] = images[i].crop(*roi)
 
     # Construct a profile of (phi, theta) angles for each image
     ph_th_profile = np.zeros((num_images, 2))
