@@ -46,7 +46,7 @@ def build_angle_profile(num_images):
     return ph_th_profile
 
 
-def drp_loader(folder='images', img_format='jpg', roi: list | np.array = None):
+def drp_loader(folder='images', img_format='jpg', roi: list | np.ndarray = None):
     """
     Load sample and background datasets.
     :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
@@ -56,7 +56,7 @@ def drp_loader(folder='images', img_format='jpg', roi: list | np.array = None):
     :return: a stack of images, and a 2D array of elevation and azimuth angles of each image.
     """
 
-    if len(roi) != 4:
+    if roi and len(roi) != 4:
         raise ValueError('Region of interest must contain 4 coordinates')
 
     # Set path to load images
@@ -112,24 +112,24 @@ def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], c
     return norm_images
 
 
-def igrey2drp(samples: list[Image.Image]):
-    """
-    Builds list of images into a 4D DRP dataset of dimensions [w x h x theta x phi].
-    :param samples: List of image samples.
-    :return: A numpy array of dimension 4.
-    """
-    width, height = samples[0].size
-    dataset = np.zeros((width, height, th_num, ph_num))
-    angle_profile = build_angle_profile(len(samples))
-    for i in tqdm(range(len(samples)), desc='building 4D DRP dataset'):
-        phi, theta = angle_profile[i]
-        phi_step = (ph_max - ph_min) / (ph_num - 1)
-        th_step = (th_max - th_min) / (th_num - 1)
-        phi_ind = (phi - ph_min) / phi_step
-        theta_ind = (theta - th_min) / th_step
-        dataset[:, :, phi_ind, theta_ind] = samples[i]
-
-    return dataset
+# def igrey2drp(samples: list[Image.Image]):
+#     """
+#     Builds list of images into a 4D DRP dataset of dimensions [w x h x theta x phi].
+#     :param samples: List of image samples.
+#     :return: A numpy array of dimension 4.
+#     """
+#     width, height = samples[0].size
+#     dataset = np.zeros((width, height, th_num, ph_num))
+#     angle_profile = build_angle_profile(len(samples))
+#     for i in tqdm(range(len(samples)), desc='building 4D DRP dataset'):
+#         phi, theta = angle_profile[i]
+#         phi_step = (ph_max - ph_min) / (ph_num - 1)
+#         th_step = (th_max - th_min) / (th_num - 1)
+#         phi_ind = int((phi - ph_min) / phi_step)
+#         theta_ind = int((theta - th_min) / th_step)
+#         dataset[:, :, phi_ind, theta_ind] = np.array(samples[i]).T
+#
+#     return dataset
 
 
 def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax = None, scalebar: bool = False):
@@ -146,12 +146,11 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
     if np.issubdtype(drp_array.dtype, np.floating) and drp_array.max() <= 1.0:
         drp_array = (drp_array * 255).astype(np.uint8)
 
-    th_step = (th_max - th_min) / (th_num - 1)
-    ph_step = 360 / (ph_num - 1)
-
     # Meshgrid of phi (x-axis), theta (y-axis)
-    phi, theta = np.meshgrid(np.arange(0, 360 + ph_step, ph_step),
-                             np.arange(th_min, th_max + th_step, th_step))
+    ph_step = 360 / ph_num
+    th_step = (th_max - th_min) / th_num
+    phi, theta = np.meshgrid(np.linspace(0, 360 + ph_step, ph_num + 1),
+                             np.linspace(th_min, th_max + th_step, th_num + 1))
 
     # Projection mapping
     if project == "stereo":
@@ -175,6 +174,46 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
 
     return ax
 
+def drp_measure(img_sample, dataset: np.ndarray=None, images: list[Image.Image]=None):
+    fig, ax = plt.subplots()
+    ax.imshow(img_sample, cmap="gray")
+    ax.set_title("Click on image for DRP points, press ENTER to stop")
+    points = plt.ginput(n=-1, timeout=10)  # unlimited clicks, press Enter to stop
+    plt.close(fig)
+
+    if len(points) == 0:
+        print("No points selected.")
+        return []
+
+    num_points = len(points)
+    x = [int(p[0]) for p in points]
+    y = [int(p[1]) for p in points]
+
+    fig, axs = plt.subplots(num_points + 1)
+    # First subplot shows original image with markers
+    axs[0].imshow(img_sample, cmap="gray")
+    axs[0].scatter(x, y, c='r', marker='x', s=100)
+    for i in range(num_points):
+        axs[0].text(x[i] + 5, y[i] + 5, str(i + 1), fontsize=12, color='yellow')
+    axs[0].set_title("Selected Points")
+
+    drp_measurement = []
+    for i in tqdm(range(num_points), desc='calculating DRP measurements'):
+        row, col = x[i], y[i]
+        drp_list = [images[k].getpixel((row, col)) for k in range(len(images))]
+        drp = np.reshape(drp_list, (ph_num, th_num))
+        drp = drp.T
+        # drp = dataset[row][col]  # assuming drp_original is a 2D list
+        drp_measurement.append(drp)
+
+        # Show DRP using custom display function
+        axs[i + 1] = display_drp(drp, ax=axs[i + 1])
+        axs[i + 1].set_title(f"DRP of point {i + 1}")
+
+    plt.tight_layout()
+    plt.show()
+
+    return drp_measurement
 
 if __name__ == '__main__':
     images, profile = drp_loader()
