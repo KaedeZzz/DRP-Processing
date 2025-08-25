@@ -1,4 +1,5 @@
 from PIL import Image
+from tqdm import tqdm
 
 
 def load_images(path, affix: str) -> list[Image.Image]:
@@ -9,7 +10,7 @@ def load_images(path, affix: str) -> list[Image.Image]:
     :return: A list of image objects of class Image.Image.
     """
     images = []
-    for image_path in path.glob('*.' + affix):
+    for image_path in tqdm(path.glob('*.' + affix), desc='loading images'):
         try:
             image = Image.open(image_path)
             images.append(image)
