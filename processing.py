@@ -9,6 +9,8 @@ plotting -- plot DRPs.
 import yaml
 
 from pathlib import Path
+from tqdm import tqdm
+
 import numpy as np
 from PIL import Image
 from scipy.signal import wiener
@@ -50,7 +52,7 @@ def drp_loader(folder='images', img_format='jpg'):
         raise ValueError('The number of images loaded does not match angle range')
 
     # Convert all images into greyscale
-    for i in range(num_images):
+    for i in tqdm(range(num_images), desc='converting images into greyscale'):
         images[i] = images[i].convert('L')
 
     # Construct a profile of (phi, theta) angles for each image
@@ -58,7 +60,6 @@ def drp_loader(folder='images', img_format='jpg'):
     indexing = np.arange(1, num_images + 1)
     phi_step = (ph_max - ph_min) / (ph_num - 1)
     th_step = (th_max - th_min) / (th_num - 1)
-
     for i in range(num_images):
         ph_th_profile[i, 0] = ((indexing[i] - 1) // th_num) * phi_step
         ph_th_profile[i, 1] = ((indexing[i] - 1) % th_num) * th_step + th_min
@@ -66,7 +67,7 @@ def drp_loader(folder='images', img_format='jpg'):
     return images, ph_th_profile
 
 
-def background_sub(samples: list[Image.Image], backgrounds: list[Image.Image], coeff: float = 1.0) -> list[Image.Image]:
+def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], coeff: float = 1.0) -> list[Image.Image]:
     """
     Apply background subtraction to images.
     :param samples: list of all images.
@@ -79,7 +80,7 @@ def background_sub(samples: list[Image.Image], backgrounds: list[Image.Image], c
         raise ValueError('The number of samples does not match number of backgrounds')
 
     # Apply Wiener filter to the backgrounds, the window size parameter is from original MATLAB code
-    for i in range(num_samples):
+    for i in tqdm(range(num_samples), desc='applying wiener filter'):
         img = backgrounds[i]
         img_array = np.array(img)
         filtered_array = wiener(img_array, mysize=(7, 7))
@@ -88,7 +89,7 @@ def background_sub(samples: list[Image.Image], backgrounds: list[Image.Image], c
 
     # Normalize images by division by backgrounds
     norm_images = []
-    for i in range(num_samples):
+    for i in tqdm(range(num_samples), desc='normalizing images'):
         sample = np.array(samples[i]).astype(np.float32)
         back = np.array(backgrounds[i]).astype(np.float32)
         back[back == 0] = 1 # Prevent divide-by-zero
