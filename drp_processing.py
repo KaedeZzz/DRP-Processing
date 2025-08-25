@@ -132,7 +132,7 @@ def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], c
 #     return dataset
 
 
-def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax = None, scalebar: bool = False):
+def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax = None, scalebar: bool = True):
     """
     Returns a matplotlib axis of a DRP in polar coordinates.
     :param drp_array: 2D dataset in [theta, phi].
@@ -170,6 +170,7 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
     h = ax.pcolormesh(xx, yy, drp_array, cmap=cmap, shading='auto')
     ax.set_aspect('equal')
     ax.axis('off')
+    h.set_clim((0, 255))
 
     if scalebar:
         plt.colorbar(h, ax=ax)
