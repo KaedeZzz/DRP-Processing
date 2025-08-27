@@ -112,26 +112,6 @@ def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], c
     return norm_images
 
 
-# def igrey2drp(samples: list[Image.Image]):
-#     """
-#     Builds list of images into a 4D DRP dataset of dimensions [w x h x theta x phi].
-#     :param samples: List of image samples.
-#     :return: A numpy array of dimension 4.
-#     """
-#     width, height = samples[0].size
-#     dataset = np.zeros((width, height, th_num, ph_num))
-#     angle_profile = build_angle_profile(len(samples))
-#     for i in tqdm(range(len(samples)), desc='building 4D DRP dataset'):
-#         phi, theta = angle_profile[i]
-#         phi_step = (ph_max - ph_min) / (ph_num - 1)
-#         th_step = (th_max - th_min) / (th_num - 1)
-#         phi_ind = int((phi - ph_min) / phi_step)
-#         theta_ind = int((theta - th_min) / th_step)
-#         dataset[:, :, phi_ind, theta_ind] = np.array(samples[i]).T
-#
-#     return dataset
-
-
 def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax = None, scalebar: bool = True):
     """
     Returns a matplotlib axis of a DRP in polar coordinates.
@@ -146,13 +126,13 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
     if np.issubdtype(drp_array.dtype, np.floating) and drp_array.max() <= 1.0:
         drp_array = (drp_array * 255).astype(np.uint8)
 
-    # Meshgrid of phi (x-axis), theta (y-axis)
+    # Meshgrid of phi and theta
     ph_step = 360 / ph_num
     th_step = (th_max - th_min) / th_num
     phi, theta = np.meshgrid(np.linspace(0, 360 + ph_step, ph_num + 1),
                              np.linspace(th_min, th_max + th_step, th_num + 1))
 
-    # Projection mapping
+    # Projection mapping, from angles to x-y plane
     if project == "stereo":
         xx = np.cos(np.radians(theta)) * np.cos(np.radians(phi)) / (1 + np.sin(np.radians(theta)))
         yy = np.cos(np.radians(theta)) * np.sin(np.radians(phi)) / (1 + np.sin(np.radians(theta)))
@@ -162,25 +142,28 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
     else:
         raise ValueError("Unknown project type. Use 'stereo' or 'direct'.")
 
+    # create axis if none provided
     if ax is None:
         fig, ax = plt.subplots()
-
-    print(drp_array.shape)
-
+    # plot the color mesh
     h = ax.pcolormesh(xx, yy, drp_array, cmap=cmap, shading='auto')
-    ax.set_aspect('equal')
+    ax.set_aspect('equal') # This ensures projected mesh is circular, not elliptical
     ax.axis('off')
-
     if scalebar:
         plt.colorbar(h, ax=ax)
-
     return ax
 
-def drp_measure(img_sample, dataset: np.ndarray=None, images: list[Image.Image]=None):
+def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list:
+    """
+    Let the user select points, then calculate and display the DRP for each point.
+    :param img_sample: sample image for user to select points on.
+    :param images: images to calculate DRP.
+    :return: DRP measurement for each point.
+    """
     fig, ax = plt.subplots()
-    ax.imshow(img_sample, cmap="gray")
+    ax.imshow(img_sample, cmap="gray") # show the sample image first
     ax.set_title("Click on image for DRP points, press ENTER to stop")
-    points = plt.ginput(n=-1, timeout=30)  # unlimited clicks, press Enter to stop
+    points = plt.ginput(n=-1, timeout=30)  # unlimited clicks, press Enter to stop, 30 seconds timeout
     plt.close(fig)
 
     if len(points) == 0:
@@ -200,12 +183,12 @@ def drp_measure(img_sample, dataset: np.ndarray=None, images: list[Image.Image]=
     axs[0].set_title("Selected Points")
 
     drp_measurement = []
+    # calculate DRPs
     for i in tqdm(range(num_points), desc='calculating DRP measurements'):
         row, col = x[i], y[i]
         drp_list = [images[k].getpixel((row, col)) for k in range(len(images))]
         drp = np.reshape(drp_list, (ph_num, th_num))
-        drp = drp.T
-        # drp = dataset[row][col]  # assuming drp_original is a 2D list
+        drp = drp.T # in consistency with custom display function
         drp_measurement.append(drp)
 
         # Show DRP using custom display function
@@ -214,9 +197,4 @@ def drp_measure(img_sample, dataset: np.ndarray=None, images: list[Image.Image]=
 
     plt.tight_layout()
     plt.show()
-
     return drp_measurement
-
-if __name__ == '__main__':
-    images, profile = drp_loader()
-    print(profile)
