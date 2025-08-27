@@ -170,7 +170,6 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
     h = ax.pcolormesh(xx, yy, drp_array, cmap=cmap, shading='auto')
     ax.set_aspect('equal')
     ax.axis('off')
-    h.set_clim((0, 255))
 
     if scalebar:
         plt.colorbar(h, ax=ax)
