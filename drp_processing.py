@@ -181,7 +181,7 @@ def drp_measure(img_sample, dataset: np.ndarray=None, images: list[Image.Image]=
     fig, ax = plt.subplots()
     ax.imshow(img_sample, cmap="gray")
     ax.set_title("Click on image for DRP points, press ENTER to stop")
-    points = plt.ginput(n=-1, timeout=10)  # unlimited clicks, press Enter to stop
+    points = plt.ginput(n=-1, timeout=30)  # unlimited clicks, press Enter to stop
     plt.close(fig)
 
     if len(points) == 0:
