@@ -52,7 +52,7 @@ def drp_loader(folder='images', img_format='jpg', roi: list | np.ndarray = None)
     :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
     :param folder: The folder where the images are saved.
     :param img_format: The image format to load.
-    :param roi: The region of interest.
+    :param roi: The region of interest, a list of length 4.
     :return: a stack of images, and a 2D array of elevation and azimuth angles of each image.
     """
 
@@ -198,3 +198,40 @@ def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list
     plt.tight_layout()
     plt.show()
     return drp_measurement
+
+
+def area_DRP(images: list[Image.Image], roi: list | np.ndarray = None, display: bool = True) -> np.ndarray:
+    """
+    Calculate and display DRP over an area on the image.
+    :param images: images to calculate DRP.
+    :param roi: Region of interest to calculate DRP over.
+    :param display: whether to display the DRP plot.
+    :return: a Numpy array representing the DRP data.
+    """
+    if roi and len(roi) != 4:
+        raise ValueError("ROI must be of length 4")
+    elif roi:
+        imin, imax, jmin, jmax = roi
+    else:
+        imin, imax, jmin, jmax = 0, images[0].size[0], 0, images[0].size[1]
+    num_points = len(images)
+
+    drp_array = []
+    for row in tqdm(range(imin, imax), desc='calculating pixel-wise DRP'):
+        for col in range(jmin, jmax):
+            drp_list = [images[k].getpixel((row, col)) for k in range(len(images))]
+            drp = np.reshape(drp_list, (ph_num, th_num))
+            drp = drp.T  # in consistency with custom display function
+            drp_array.append(drp)
+
+    drp_array = np.array(drp_array)
+    drp_array = np.mean(drp_array, axis=0)
+
+    if display:
+        fig, ax = plt.subplots()
+        ax = display_drp(drp_array, ax=ax)
+        plt.tight_layout()
+        plt.show()
+
+    return drp_array
+
