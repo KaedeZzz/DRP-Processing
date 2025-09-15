@@ -115,7 +115,7 @@ def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], c
 def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax = None, scalebar: bool = True):
     """
     Returns a matplotlib axis of a DRP in polar coordinates.
-    :param drp_array: 2D dataset in [theta, phi].
+    :param drp_array: 2D DRP dataset in dimensions [th_num, ph_num].
     :param cmap: matplotlib colormap name.
     :param project: projection method used, either 'stereo' or 'direct'.
     :param ax: matplotlib axis to draw on.
@@ -158,7 +158,7 @@ def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list
     Let the user select points, then calculate and display the DRP for each point.
     :param img_sample: sample image for user to select points on.
     :param images: images to calculate DRP.
-    :return: DRP measurement for each point.
+    :return: DRP measurement for each point. The DRP matrix is in dimensions [th_num x ph_num].
     """
     fig, ax = plt.subplots()
     ax.imshow(img_sample, cmap="gray") # show the sample image first
@@ -206,7 +206,7 @@ def area_DRP(images: list[Image.Image], roi: list | np.ndarray = None, display: 
     :param images: images to calculate DRP.
     :param roi: Region of interest to calculate DRP over.
     :param display: whether to display the DRP plot.
-    :return: a Numpy array representing the DRP data.
+    :return: a 2D Numpy array representing the DRP data. [th_num x ph_num]
     """
     if roi and len(roi) != 4:
         raise ValueError("ROI must be of length 4")
