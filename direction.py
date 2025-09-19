@@ -4,6 +4,7 @@ from tqdm import tqdm
 import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
+from drp_processing import display_drp # For testing purpose
 
 cwd = Path.cwd()
 
@@ -32,17 +33,17 @@ def get_drp_direction(drp_mat: np.ndarray, attenuation: float = 1.0) -> list:
 
     for p in range(ph_num):
         for t in range(th_num):
-            theta_deg = t * 360 / th_num
+            phi_deg = p * 360 / ph_num
             mag = (drp_mat[t, p] - mat_mean) * attenuation
-            theta_rad = theta_deg * np.pi / 180
-            x, y = mag * np.cos(theta_rad), mag * np.sin(theta_rad)
+            phi_rad = phi_deg * np.pi / 180
+            x, y = mag * np.cos(phi_rad), mag * np.sin(phi_rad)
             res[0] += x
             res[1] += y
 
     return res
 
 
-def drp_direction_map(images: list[Image.Image], roi: list | np.ndarray = None, display: bool = True) -> np.ndarray:
+def drp_direction_map(images: list[Image.Image], roi: list | np.ndarray = None, display: bool = True):
     """
     Calculate (and display) the direction map of a DRP over a region of interest.
     :param images: source images to perform DRP calculation.
@@ -86,13 +87,20 @@ def drp_direction_map(images: list[Image.Image], roi: list | np.ndarray = None, 
 
     # display the magnitude vector maps
     if display:
-        fig, axes = plt.subplots(1, 3)
-        axes[0].imshow(images[0].crop((imin, jmin, imax, jmax)), cmap="gray")
+        fig, axes = plt.subplots(figsize=(13, 3), ncols=3)
+
+        im1 = axes[0].imshow(images[th_num - 1].crop((imin, jmin, imax, jmax)), cmap="gray")
+        fig.colorbar(im1, ax=axes[0])
         axes[0].set_title("ROI image")
-        axes[1].imshow(norm_mag_map, cmap='jet')
+
+        im2 = axes[1].imshow(norm_mag_map, cmap='afmhot')
+        fig.colorbar(im2, ax=axes[1])
         axes[1].set_title("Normalised DRP magnitudes")
-        axes[2].imshow(deg_map, cmap='hsv')
+
+        im3 = axes[2].imshow(deg_map, cmap='hsv')
         axes[2].set_title("DRP angles")
+        fig.colorbar(im3, ax=axes[2])
+
         plt.show()
 
     return norm_mag_map, deg_map
