@@ -200,7 +200,7 @@ def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list
     return drp_measurement
 
 
-def area_DRP(images: list[Image.Image], roi: list | np.ndarray = None, display: bool = True) -> np.ndarray:
+def area_drp(images: list[Image.Image], roi: list | np.ndarray = None, display: bool = False) -> np.ndarray:
     """
     Calculate and display DRP over an area on the image.
     :param images: images to calculate DRP.
@@ -217,12 +217,13 @@ def area_DRP(images: list[Image.Image], roi: list | np.ndarray = None, display: 
     num_points = len(images)
 
     drp_array = []
-    for row in tqdm(range(imin, imax), desc='calculating pixel-wise DRP'):
-        for col in range(jmin, jmax):
-            drp_list = [images[k].getpixel((row, col)) for k in range(len(images))]
-            drp = np.reshape(drp_list, (ph_num, th_num))
-            drp = drp.T  # in consistency with custom display function
-            drp_array.append(drp)
+    for i in tqdm(range((imax - imin) * (jmax - jmin)), desc='calculating pixel-wise DRP'):
+        row = i // (jmax - jmin) + imin
+        col = i % (jmax - jmin) + jmin
+        drp_list = [images[k].getpixel((row, col)) for k in range(len(images))]
+        drp = np.reshape(drp_list, (ph_num, th_num))
+        drp = drp.T  # in consistency with custom display function
+        drp_array.append(drp)
 
     drp_array = np.array(drp_array)
     drp_array = np.mean(drp_array, axis=0)
