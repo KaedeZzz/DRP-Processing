@@ -16,7 +16,7 @@ from PIL import Image
 from scipy.signal import wiener
 from matplotlib import pyplot as plt
 
-from utils import load_images
+from utils import load_images, ROI
 
 cwd = Path.cwd()
 
@@ -46,7 +46,7 @@ def build_angle_profile(num_images):
     return ph_th_profile
 
 
-def drp_loader(folder='images', img_format='jpg', roi: list | np.ndarray = None):
+def drp_loader(folder='images', img_format='jpg', roi: ROI | None = None):
     """
     Load sample and background datasets.
     :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
@@ -55,9 +55,6 @@ def drp_loader(folder='images', img_format='jpg', roi: list | np.ndarray = None)
     :param roi: The region of interest, a list of length 4.
     :return: a stack of images, and a 2D array of elevation and azimuth angles of each image.
     """
-
-    if roi and len(roi) != 4:
-        raise ValueError('Region of interest must contain 4 coordinates')
 
     # Set path to load images
     if folder == '':
@@ -91,6 +88,8 @@ def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], c
     num_samples = len(samples)
     if num_samples != len(backgrounds):
         raise ValueError('The number of samples does not match number of backgrounds')
+    if samples[0].size != backgrounds[0].size:
+        raise ValueError('The size of samples does not match size of backgrounds')
 
     # Apply Wiener filter to the backgrounds, the window size parameter is from original MATLAB code
     for i in tqdm(range(num_samples), desc='applying wiener filter'):
@@ -146,7 +145,7 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
     if ax is None:
         fig, ax = plt.subplots()
     # plot the color mesh
-    h = ax.pcolormesh(xx, yy, drp_array, cmap=cmap, shading='auto')
+    h = ax.pcolormesh(xx, yy, drp_array.T, cmap=cmap, shading='auto')
     ax.set_aspect('equal') # This ensures projected mesh is circular, not elliptical
     ax.axis('off')
     if scalebar:
@@ -185,8 +184,8 @@ def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list
     drp_measurement = []
     # calculate DRPs
     for i in tqdm(range(num_points), desc='calculating DRP measurements'):
-        row, col = x[i], y[i]
-        drp_list = [images[k].getpixel((row, col)) for k in range(len(images))]
+        col, row = x[i], y[i]
+        drp_list = [images[k].getpixel((col, row)) for k in range(len(images))]
         drp = np.reshape(drp_list, (ph_num, th_num))
         drp = drp.T # in consistency with custom display function
         drp_measurement.append(drp)
@@ -200,7 +199,27 @@ def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list
     return drp_measurement
 
 
-def area_drp(images: list[Image.Image], roi: list | np.ndarray = None, display: bool = False) -> np.ndarray:
+def drp(images: list[Image.Image], loc) -> np.ndarray:
+    """
+    Calculate DRP for a single pixel.
+    :param images: images to calculate DRP.
+    :param loc: location of the pixel.
+    :return: a 2D Numpy array representing the DRP data. [th_num x ph_num]
+    """
+    if len(loc) != 2:
+        raise ValueError("Wrong dimension of pixel location.")
+    x, y = loc
+    num_images = len(images)
+    if num_images != ph_num * th_num:
+        raise ValueError("Number of images does not match angle profile.")
+    drp_array = np.zeros((ph_num, th_num))
+    for k in range(num_images):
+        i = k // th_num
+        j = k % th_num
+        drp_array[i, j] = images[k].getpixel((x, y))
+    return drp_array
+
+def area_mean_drp(images: list[Image.Image], roi: ROI | None = None, display: bool = False) -> np.ndarray:
     """
     Calculate and display DRP over an area on the image.
     :param images: images to calculate DRP.
@@ -208,31 +227,17 @@ def area_drp(images: list[Image.Image], roi: list | np.ndarray = None, display: 
     :param display: whether to display the DRP plot.
     :return: a 2D Numpy array representing the DRP data. [th_num x ph_num]
     """
-    if roi and len(roi) != 4:
-        raise ValueError("ROI must be of length 4")
-    elif roi:
-        imin, imax, jmin, jmax = roi
+    if roi:
+        roi.check(images[0].size)
+        imin, jmin, imax, jmax = roi
     else:
-        imin, imax, jmin, jmax = 0, images[0].size[0], 0, images[0].size[1]
-    num_points = len(images)
+        imin, jmin, imax, jmax = 0, 0, images[0].size[0], images[0].size[1]
 
-    drp_array = []
-    for i in tqdm(range((imax - imin) * (jmax - jmin)), desc='calculating pixel-wise DRP'):
-        row = i // (jmax - jmin) + imin
-        col = i % (jmax - jmin) + jmin
-        drp_list = [images[k].getpixel((row, col)) for k in range(len(images))]
-        drp = np.reshape(drp_list, (ph_num, th_num))
-        drp = drp.T  # in consistency with custom display function
-        drp_array.append(drp)
-
-    drp_array = np.array(drp_array)
-    drp_array = np.mean(drp_array, axis=0)
-
-    if display:
-        fig, ax = plt.subplots()
-        ax = display_drp(drp_array, ax=ax)
-        plt.tight_layout()
-        plt.show()
-
-    return drp_array
+    drp_list = []
+    for i in tqdm(range((imax - imin) * (jmax - jmin)), desc='Calculating pixel-wise DRP'):
+        col = i // (jmax - jmin) + imin
+        row = i % (jmax - jmin) + jmin
+        drp_list.append(drp(images, (col, row)))
+    mean_mat = np.mean(drp_list, axis=0)
+    return mean_mat
 
