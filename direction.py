@@ -4,7 +4,9 @@ from tqdm import tqdm
 import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
-from drp_processing import display_drp # For testing purpose
+
+from drp_processing import drp
+from utils import ROI
 
 cwd = Path.cwd()
 
@@ -32,18 +34,17 @@ def get_drp_direction(drp_mat: np.ndarray, attenuation: float = 1.0) -> list:
     mat_mean = np.mean(drp_mat)
 
     for p in range(ph_num):
-        for t in range(th_num):
-            phi_deg = p * 360 / ph_num
-            mag = (drp_mat[t, p] - mat_mean) * attenuation
-            phi_rad = phi_deg * np.pi / 180
-            x, y = mag * np.cos(phi_rad), mag * np.sin(phi_rad)
-            res[0] += x
-            res[1] += y
+        phi_deg = p * 360 / ph_num
+        mag = (np.mean(drp_mat[p, :]) - mat_mean) * attenuation
+        phi_rad = phi_deg * np.pi / 180
+        x, y = mag * np.cos(phi_rad), mag * np.sin(phi_rad)
+        res[0] += x
+        res[1] += y
 
     return res
 
 
-def drp_direction_map(images: list[Image.Image], roi: list | np.ndarray = None, display: bool = True):
+def drp_direction_map(images: list[Image.Image], roi: ROI | None = None, display: bool = True):
     """
     Calculate (and display) the direction map of a DRP over a region of interest.
     :param images: source images to perform DRP calculation.
@@ -51,34 +52,26 @@ def drp_direction_map(images: list[Image.Image], roi: list | np.ndarray = None, 
     :param display: whether to display the direction map on screen.
     :return: direction map in 2D NumPy array [width, height].
     """
-    if roi and len(roi) != 4:
-        raise ValueError("ROI must be of length 4")
-    elif roi:
-        imin, imax, jmin, jmax = roi
+    if roi:
+        roi.check(images[0].size)
+        imin, jmin, imax, jmax = roi
     else:
-        imin, imax, jmin, jmax = 0, images[0].size[0], 0, images[0].size[1]
-    num_points = len(images)
-
-    drp_array_4 = np.zeros([imax - imin, jmax - jmin, th_num, ph_num]) # 4 Dimensions!
-    for i in tqdm(range((imax - imin) * (jmax - jmin)), desc='calculating pixel-wise DRP'):
-        row = i // (jmax - jmin)
-        col = i % (jmax - jmin)
-        drp_list = [images[k].getpixel((row, col)) for k in range(len(images))]
-        drp = np.reshape(drp_list, (ph_num, th_num))
-        drp = drp.T  # in consistency with custom display function
-        drp_array_4[row, col] = drp
+        imin, jmin, imax, jmax = 0, 0, images[0].size[0], images[0].size[1]
 
     mag_map = np.zeros([imax - imin, jmax - jmin])
     deg_map = np.zeros([imax - imin, jmax - jmin])
-    for i in tqdm(range((imax - imin) * (jmax - jmin)), desc='calculating DRP direction vectors'):
-        row = i // (jmax - jmin)
-        col = i % (jmax - jmin)
-        drp_vector = get_drp_direction(drp_array_4[row, col], attenuation=1.0)
+    for k in tqdm(range((imax - imin) * (jmax - jmin)), desc='Generating DRP direction map'):
+        i = k // (jmax - jmin)
+        j = k % (jmax - jmin)
+        col = i + imin
+        row = j + jmin
+        drp_mat = drp(images, (col, row))
+        drp_vector = get_drp_direction(drp_mat, attenuation=1.0)
         x, y = drp_vector
         deg = np.degrees(np.arctan2(y, x))
         mag = np.linalg.norm(drp_vector)
-        mag_map[row, col] = mag
-        deg_map[row, col] = deg
+        mag_map[i, j] = mag
+        deg_map[i, j] = deg
 
     # clip extreme values, normalise
     mat_mean = np.mean(mag_map)
@@ -104,3 +97,6 @@ def drp_direction_map(images: list[Image.Image], roi: list | np.ndarray = None, 
         plt.show()
 
     return norm_mag_map, deg_map
+
+def drp_mask_angle(vec_field, roi, threshold, dimension):
+    pass
