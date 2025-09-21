@@ -1,3 +1,5 @@
+from PIL import Image
+
 class ROI:
     def __init__(self, x, y, w, h):
         """
@@ -30,3 +32,5 @@ class ROI:
             raise ValueError("image must have 2 dimensions")
         elif self.x + self.w > dims[0] or self.y + self.h > dims[1]:
             raise ValueError("RoI exceeds image dimensions")
+
+

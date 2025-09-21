@@ -81,22 +81,47 @@ def drp_direction_map(images: list[Image.Image], roi: ROI | None = None, display
     # display the magnitude vector maps
     if display:
         fig, axes = plt.subplots(figsize=(13, 3), ncols=3)
-
         im1 = axes[0].imshow(images[th_num - 1].crop((imin, jmin, imax, jmax)), cmap="gray")
         fig.colorbar(im1, ax=axes[0])
         axes[0].set_title("ROI image")
-
         im2 = axes[1].imshow(norm_mag_map, cmap='afmhot')
         fig.colorbar(im2, ax=axes[1])
         axes[1].set_title("Normalised DRP magnitudes")
-
         im3 = axes[2].imshow(deg_map, cmap='hsv')
         axes[2].set_title("DRP angles")
         fig.colorbar(im3, ax=axes[2])
-
         plt.show()
 
     return norm_mag_map, deg_map
 
-def drp_mask_angle(vec_field, roi, threshold, dimension):
-    pass
+
+def drp_mask_angle(images: list[Image.Image], mag_map: np.ndarray, deg_map:np.ndarray, roi: ROI | None, threshold, orientation):
+    """
+    Obtain a mask of image that highlights pixels with DRP orientations around a designated direction.
+    :param images: Source images.
+    :param mag_map: Map that indicates magnitude of DRP orientation of sample.
+    :param deg_map: Map that indicates angle of DRP orientation of sample.
+    :param roi: Region of interest instance.
+    :param threshold: Two-sided angle threshold around desired orientation.
+    :param orientation: Desired orientation to highlight.
+    :return: The image mask and the
+    """
+
+    if roi:
+        roi.check(images[0].size)
+        imin, jmin, imax, jmax = roi
+    else:
+        imin, jmin, imax, jmax = 0, 0, images[0].size[0], images[0].size[1]
+
+    img_mask = np.zeros([imax - imin, jmax - jmin])
+    for k in tqdm(range((imax - imin) * (jmax - jmin)), desc='Masking image with directionality'):
+        col = k // (jmax - jmin) + imin
+        row = k % (jmax - jmin) + jmin
+        i = col - imin
+        j = row - jmin
+        if orientation - threshold < deg_map[i, j] < orientation + threshold:
+            img_mask[i, j] = mag_map[i, j]
+
+    return img_mask, roi
+
+
