@@ -95,33 +95,29 @@ def drp_direction_map(images: list[Image.Image], roi: ROI | None = None, display
     return norm_mag_map, deg_map
 
 
-def drp_mask_angle(images: list[Image.Image], mag_map: np.ndarray, deg_map:np.ndarray, roi: ROI | None, threshold, orientation):
+def drp_mask_angle(mag_map: np.ndarray, deg_map:np.ndarray, threshold, orientation) -> np.ndarray:
     """
     Obtain a mask of image that highlights pixels with DRP orientations around a designated direction.
-    :param images: Source images.
     :param mag_map: Map that indicates magnitude of DRP orientation of sample.
     :param deg_map: Map that indicates angle of DRP orientation of sample.
-    :param roi: Region of interest instance.
     :param threshold: Two-sided angle threshold around desired orientation.
     :param orientation: Desired orientation to highlight.
     :return: The image mask and the
     """
 
-    if roi:
-        roi.check(images[0].size)
-        imin, jmin, imax, jmax = roi
-    else:
-        imin, jmin, imax, jmax = 0, 0, images[0].size[0], images[0].size[1]
+    if mag_map.shape != deg_map.shape:
+        raise ValueError('Magnitude and orientation dimensions do not match.')
 
-    img_mask = np.zeros([imax - imin, jmax - jmin])
-    for k in tqdm(range((imax - imin) * (jmax - jmin)), desc='Masking image with directionality'):
-        col = k // (jmax - jmin) + imin
-        row = k % (jmax - jmin) + jmin
-        i = col - imin
-        j = row - jmin
+    # magnitude needs to be normalised before use
+    norm_mag_map = (mag_map - mag_map.min()) / (mag_map.max() - mag_map.min() + 1e-9)
+
+    w, h = mag_map.shape[:2]
+    img_mask = np.ones((w, h))
+    for k in range(w * h):
+        i = k // h
+        j = k % h
         if orientation - threshold < deg_map[i, j] < orientation + threshold:
-            img_mask[i, j] = mag_map[i, j]
-
-    return img_mask, roi
+            img_mask[i, j] = norm_mag_map[i, j]
+    return img_mask
 
 
