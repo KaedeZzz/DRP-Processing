@@ -7,10 +7,8 @@ plotting -- plot DRPs.
 """
 
 import yaml
-
 from pathlib import Path
 from tqdm import tqdm
-
 import numpy as np
 from PIL import Image
 from scipy.signal import wiener
@@ -233,11 +231,10 @@ def area_mean_drp(images: list[Image.Image], roi: ROI | None = None, display: bo
     else:
         imin, jmin, imax, jmax = 0, 0, images[0].size[0], images[0].size[1]
 
-    drp_list = []
-    for i in tqdm(range((imax - imin) * (jmax - jmin)), desc='Calculating pixel-wise DRP'):
+    drp_array = np.zeros((ph_num, th_num))
+    for i in tqdm(range((imax - imin) * (jmax - jmin)), desc='Calculating area-mean DRP'):
         col = i // (jmax - jmin) + imin
         row = i % (jmax - jmin) + jmin
-        drp_list.append(drp(images, (col, row)))
-    mean_mat = np.mean(drp_list, axis=0)
-    return mean_mat
+        drp_array += (drp(images, (col, row)) / len(images))
+    return drp_array
 
