@@ -57,7 +57,6 @@ def drp_direction_map(images: list[Image.Image], roi: ROI | None = None, display
         imin, jmin, imax, jmax = roi
     else:
         imin, jmin, imax, jmax = 0, 0, images[0].size[0], images[0].size[1]
-
     mag_map = np.zeros([imax - imin, jmax - jmin])
     deg_map = np.zeros([imax - imin, jmax - jmin])
     for k in tqdm(range((imax - imin) * (jmax - jmin)), desc='Generating DRP direction map'):
@@ -80,14 +79,14 @@ def drp_direction_map(images: list[Image.Image], roi: ROI | None = None, display
 
     # display the magnitude vector maps
     if display:
-        fig, axes = plt.subplots(figsize=(13, 3), ncols=3)
+        fig, axes = plt.subplots(figsize=(13, 4), ncols=3)
         im1 = axes[0].imshow(images[th_num - 1].crop((imin, jmin, imax, jmax)), cmap="gray")
         fig.colorbar(im1, ax=axes[0])
         axes[0].set_title("ROI image")
-        im2 = axes[1].imshow(norm_mag_map, cmap='afmhot')
+        im2 = axes[1].imshow(norm_mag_map.T, cmap='afmhot')
         fig.colorbar(im2, ax=axes[1])
         axes[1].set_title("Normalised DRP magnitudes")
-        im3 = axes[2].imshow(deg_map, cmap='hsv')
+        im3 = axes[2].imshow(deg_map.T, cmap='hsv')
         axes[2].set_title("DRP angles")
         fig.colorbar(im3, ax=axes[2])
         plt.show()
@@ -95,7 +94,7 @@ def drp_direction_map(images: list[Image.Image], roi: ROI | None = None, display
     return norm_mag_map, deg_map
 
 
-def drp_mask_angle(mag_map: np.ndarray, deg_map:np.ndarray, threshold, orientation) -> np.ndarray:
+def drp_mask_angle(mag_map: np.ndarray, deg_map:np.ndarray, orientation, threshold) -> np.ndarray:
     """
     Obtain a mask of image that highlights pixels with DRP orientations around a designated direction.
     :param mag_map: Map that indicates magnitude of DRP orientation of sample.
@@ -112,11 +111,13 @@ def drp_mask_angle(mag_map: np.ndarray, deg_map:np.ndarray, threshold, orientati
     norm_mag_map = (mag_map - mag_map.min()) / (mag_map.max() - mag_map.min() + 1e-9)
 
     w, h = mag_map.shape[:2]
-    img_mask = np.ones((w, h))
+    img_mask = np.ones((w, h)) / 255
     for k in range(w * h):
         i = k // h
         j = k % h
-        if orientation - threshold < deg_map[i, j] < orientation + threshold:
+        if orientation - threshold < deg_map[i, j] < orientation + threshold\
+            or orientation - threshold < deg_map[i, j] + 360 < orientation + threshold\
+            or orientation - threshold < deg_map[i, j] - 360 < orientation + threshold:
             img_mask[i, j] = norm_mag_map[i, j]
     return img_mask
 
