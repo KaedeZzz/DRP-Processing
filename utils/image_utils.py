@@ -53,19 +53,17 @@ def load_images(path, affix: str) -> list[Image.Image]:
     return images
 
 
-def mask_images(images: list[Image.Image], mask: np.ndarray, roi: ROI | None, mode: str = 'raw') -> list[Image.Image]:
+def mask_images(images: list[Image.Image], mask: np.ndarray, roi: ROI | None, normalize: bool = False) -> list[Image.Image]:
     """
     Apply a mask to all images in the list.
     Input image will have pixel values between 0 and 255. If any pixel value exceeds 255 after masking, it will be clipped.
     :param images: Images to be processed.
     :param mask: A numpy array representing the mask.
     :param roi: Region of interest; when applied, the masked images will be cropped into this region.
-    :param mode: Mode of masking images. Mode 'raw' will directly multiply the image with the mask, and mode 'enhanced' will adjust the mask to a value region of 0 and 2 then multiply.
+    :param normalize: Setting to true would normalize masked images.
     :return: List of processed images.
     """
     res_list = []
-    if mode == 'enhanced':
-        mask = 2 * (mask - mask.min()) / (mask.max() - mask.min())
     for image in tqdm(images, desc='masking images'):
         arr = np.array(image).astype(np.float64)
         if roi:
@@ -74,6 +72,8 @@ def mask_images(images: list[Image.Image], mask: np.ndarray, roi: ROI | None, mo
         if arr.shape != mask.shape:
             raise ValueError("Shape of mask must match region of interest")
         arr *= mask
+        if normalize:
+            arr = 255 * (arr - arr.min()) / (arr.max() - arr.min())
         arr = np.clip(arr, 0, 255).astype(np.uint8)
         res_img = Image.fromarray(arr)
         res_list.append(res_img)
