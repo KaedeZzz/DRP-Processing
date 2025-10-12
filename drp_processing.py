@@ -14,66 +14,7 @@ from PIL import Image
 from scipy.signal import wiener
 from matplotlib import pyplot as plt
 
-from utils import load_images, ROI
-
-cwd = Path.cwd()
-
-with open("config.yaml", 'r') as stream:
-    exp_param = yaml.safe_load(stream)
-
-# Assign parameters locally
-th_min = exp_param['th_min']
-th_max = exp_param['th_max']
-th_num = exp_param['th_num']
-ph_min = exp_param['ph_min']
-ph_max = exp_param['ph_max']
-ph_num = exp_param['ph_num']
-
-
-def build_angle_profile(num_images):
-    # Construct a profile of (phi, theta) angles for each image
-    if num_images != th_num * ph_num:
-        raise ValueError('The number of images loaded does not match angle range')
-    ph_th_profile = np.zeros((num_images, 2))
-    indexing = np.arange(1, num_images + 1)
-    phi_step = (ph_max - ph_min) / (ph_num - 1)
-    th_step = (th_max - th_min) / (th_num - 1)
-    for i in range(num_images):
-        ph_th_profile[i, 0] = ((indexing[i] - 1) // th_num) * phi_step
-        ph_th_profile[i, 1] = ((indexing[i] - 1) % th_num) * th_step + th_min
-    return ph_th_profile
-
-
-def drp_loader(folder='images', img_format='jpg', roi: ROI | None = None):
-    """
-    Load sample and background datasets.
-    :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
-    :param folder: The folder where the images are saved.
-    :param img_format: The image format to load.
-    :param roi: The region of interest, a list of length 4.
-    :return: a stack of images, and a 2D array of elevation and azimuth angles of each image.
-    """
-
-    # Set path to load images
-    if folder == '':
-        path = cwd
-    else:
-        path = cwd / folder
-
-    images = load_images(path, img_format)
-    num_images = len(images)
-
-    if num_images != th_num * ph_num:
-        raise ValueError('The number of images loaded does not match angle range')
-
-    # Convert all images into greyscale
-    for i in tqdm(range(num_images), desc='converting images into greyscale'):
-        images[i] = images[i].convert('L')
-        if roi is not None:
-            images[i] = images[i].crop(*roi)
-
-    return images, build_angle_profile(num_images)
-
+from utils import ImagePack, ImageParam, ROI
 
 def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], coeff: float = 1.0) -> list[Image.Image]:
     """
@@ -109,10 +50,11 @@ def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], c
     return norm_images
 
 
-def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax = None, scalebar: bool = True):
+def display_drp(drp_array: np.ndarray, param: ImageParam, cmap='jet', project: str = 'stereo', ax = None, scalebar: bool = True):
     """
     Returns a matplotlib axis of a DRP in polar coordinates.
     :param drp_array: 2D DRP dataset in dimensions [th_num, ph_num].
+    :param param: an ImageParam instance describing the angle profile of DRP dataset.
     :param cmap: matplotlib colormap name.
     :param project: projection method used, either 'stereo' or 'direct'.
     :param ax: matplotlib axis to draw on.
@@ -124,10 +66,11 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
         drp_array = (drp_array * 255).astype(np.uint8)
 
     # Meshgrid of phi and theta
-    ph_step = 360 / ph_num
-    th_step = (th_max - th_min) / th_num
-    phi, theta = np.meshgrid(np.linspace(0, 360 + ph_step, ph_num + 1),
-                             np.linspace(th_min, th_max + th_step, th_num + 1))
+    phi, theta = np.meshgrid(np.linspace(0, 360 + param.ph_step, param.ph_num + 1),
+                             np.linspace(param.th_min, param.th_max + param.th_step, param.th_num + 1))
+
+    print(phi)
+    print(theta)
 
     # Projection mapping, from angles to x-y plane
     if project == "stereo":
@@ -150,14 +93,15 @@ def display_drp(drp_array: np.ndarray, cmap='jet', project: str = 'stereo', ax =
         plt.colorbar(h, ax=ax)
     return ax
 
-def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list:
+def drp_measure(image_pack: ImagePack) -> list:
     """
     Let the user select points, then calculate and display the DRP for each point.
-    :param img_sample: sample image for user to select points on.
-    :param images: images to calculate DRP.
+    :param image_pack: ImagePack instance of input images and DRP parameters.
     :return: DRP measurement for each point. The DRP matrix is in dimensions [th_num x ph_num].
     """
     fig, ax = plt.subplots()
+    images, params = image_pack
+    img_sample = images[0]
     ax.imshow(img_sample, cmap="gray") # show the sample image first
     ax.set_title("Click on image for DRP points, press ENTER to stop")
     points = plt.ginput(n=-1, timeout=30)  # unlimited clicks, press Enter to stop, 30 seconds timeout
@@ -184,7 +128,7 @@ def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list
     for i in tqdm(range(num_points), desc='calculating DRP measurements'):
         col, row = x[i], y[i]
         drp_list = [images[k].getpixel((col, row)) for k in range(len(images))]
-        drp = np.reshape(drp_list, (ph_num, th_num))
+        drp = np.reshape(drp_list, (params.ph_num, params.th_num))
         drp = drp.T # in consistency with custom display function
         drp_measurement.append(drp)
 
@@ -197,15 +141,17 @@ def drp_measure(img_sample: Image.Image, images: list[Image.Image]=None) -> list
     return drp_measurement
 
 
-def drp(images: list[Image.Image], loc) -> np.ndarray:
+def drp(image_pack: ImagePack, loc) -> np.ndarray:
     """
     Calculate DRP for a single pixel.
-    :param images: images to calculate DRP.
+    :param image_pack: ImagePack instance of input images and DRP parameters.
     :param loc: location of the pixel.
     :return: a 2D Numpy array representing the DRP data. [th_num x ph_num]
     """
     if len(loc) != 2:
         raise ValueError("Wrong dimension of pixel location.")
+    images, params = image_pack
+    ph_num, th_num = params.ph_num, params.th_num
     x, y = loc
     num_images = len(images)
     if num_images != ph_num * th_num:
@@ -217,24 +163,21 @@ def drp(images: list[Image.Image], loc) -> np.ndarray:
         drp_array[i, j] = images[k].getpixel((x, y))
     return drp_array
 
-def area_mean_drp(images: list[Image.Image], roi: ROI | None = None, display: bool = False) -> np.ndarray:
+def area_mean_drp(image_pack: ImagePack, display: bool = False) -> np.ndarray:
     """
     Calculate and display DRP over an area on the image.
-    :param images: images to calculate DRP.
-    :param roi: Region of interest to calculate DRP over.
+    :param image_pack: ImagePack instance of input images and DRP parameters.
     :param display: whether to display the DRP plot.
     :return: a 2D Numpy array representing the DRP data. [th_num x ph_num]
     """
-    if roi:
-        roi.check(images[0].size)
-        imin, jmin, imax, jmax = roi
-    else:
-        imin, jmin, imax, jmax = 0, 0, images[0].size[0], images[0].size[1]
 
+    images, params = image_pack
+    ph_num, th_num = params.ph_num, params.th_num
+    w, h = images[0].size[0], images[0].size[1]
     drp_array = np.zeros((ph_num, th_num))
-    for i in tqdm(range((imax - imin) * (jmax - jmin)), desc='Calculating area-mean DRP'):
-        col = i // (jmax - jmin) + imin
-        row = i % (jmax - jmin) + jmin
-        drp_array += (drp(images, (col, row)) / len(images))
+    for i in tqdm(range(w * h), desc='Calculating area-mean DRP'):
+        col = i // h
+        row = i % h
+        drp_array += (drp(image_pack, loc=(col, row)) / (w * h))
     return drp_array
 

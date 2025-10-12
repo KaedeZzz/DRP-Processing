@@ -1,19 +1,22 @@
-from drp_processing import drp_loader, display_drp, area_mean_drp
-from direction import drp_direction_map, get_drp_direction, drp_mask_angle
-from utils import ROI, mask_images, gamma_transform
+from drp_processing import display_drp, area_mean_drp
+from direction import drp_direction_map, drp_mask_angle
+from utils import ROI, drp_loader, mask_images
 import numpy as np
 from PIL import Image
 from matplotlib import pyplot as plt
 
 if __name__ == "__main__":
-    images, profile = drp_loader()
-    # dataset = igrey2drp(images)
-    roi = ROI(0, 0, 3840, 2160)
-    mean_drp_mat = area_mean_drp(images, roi, display=True) # display image selected at highest elevation angle
-    display_drp(mean_drp_mat)
-    mag_map, deg_map = drp_direction_map(images, roi)
+    roi = ROI(0, 0, 400, 400)
+    image_pack = drp_loader(roi=roi)
+    image_pack.slice_images(2, 2)
+    images, params = image_pack
+    mean_drp_mat = area_mean_drp(image_pack, display=True) # display image selected at highest elevation angle
+    plt.imshow(mean_drp_mat)
+    display_drp(mean_drp_mat, params)
+    plt.show()
+    mag_map, deg_map = drp_direction_map(image_pack)
     img_mask = drp_mask_angle(mag_map, deg_map, orientation=90, threshold=30)
-    masked_images = mask_images(images, img_mask, roi=roi, normalize=True)
+    masked_images = mask_images(images, img_mask, normalize=True)
     for i in range(len(images)):
         if i % 100 == 0:
             masked_images[i].show()
