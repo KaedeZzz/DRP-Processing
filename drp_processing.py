@@ -14,7 +14,7 @@ from PIL import Image
 from scipy.signal import wiener
 from matplotlib import pyplot as plt
 
-from utils import ImagePack, ImageParam, ROI
+from utils import Images, ImageParam, ROI
 
 def bg_subtraction(samples: list[Image.Image], backgrounds: list[Image.Image], coeff: float = 1.0) -> list[Image.Image]:
     """
@@ -90,7 +90,7 @@ def display_drp(drp_array: np.ndarray, param: ImageParam, cmap='jet', project: s
         plt.colorbar(h, ax=ax)
     return ax
 
-def drp_measure(image_pack: ImagePack) -> list:
+def drp_measure(image_pack: Images) -> list:
     """
     Let the user select points, then calculate and display the DRP for each point.
     :param image_pack: ImagePack instance of input images and DRP parameters.
@@ -138,7 +138,7 @@ def drp_measure(image_pack: ImagePack) -> list:
     return drp_measurement
 
 
-def drp(image_pack: ImagePack, loc) -> np.ndarray:
+def drp(image_pack: Images, loc) -> np.ndarray:
     """
     Calculate DRP for a single pixel.
     :param image_pack: ImagePack instance of input images and DRP parameters.
@@ -160,7 +160,7 @@ def drp(image_pack: ImagePack, loc) -> np.ndarray:
         drp_array[i, j] = images[k].getpixel((x, y))
     return drp_array
 
-def area_mean_drp(image_pack: ImagePack, display: bool = False) -> np.ndarray:
+def area_mean_drp(image_pack: Images, display: bool = False) -> np.ndarray:
     """
     Calculate and display DRP over an area on the image.
     :param image_pack: ImagePack instance of input images and DRP parameters.

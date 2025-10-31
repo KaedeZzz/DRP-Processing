@@ -6,7 +6,7 @@ from PIL import Image
 from matplotlib import pyplot as plt
 
 from drp_processing import drp
-from utils import ImagePack, ImageParam
+from utils import Images, ImageParam
 
 cwd = Path.cwd()
 
@@ -44,7 +44,7 @@ def get_drp_direction(drp_mat: np.ndarray, params: ImageParam, attenuation: floa
     return res
 
 
-def drp_direction_map(image_pack: ImagePack, display: bool = True):
+def drp_direction_map(image_pack: Images, display: bool = True):
     """
     Calculate (and display) the direction map of a DRP over a region of interest.
     :param image_pack: ImagePack instance of images and DRP parameters.

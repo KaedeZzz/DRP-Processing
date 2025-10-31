@@ -6,6 +6,41 @@ import yaml
 
 cwd = Path.cwd()
 
+
+class ROI(object):
+    def __init__(self, x, y, w, h):
+        """
+        Region of interest bounding box.
+        :param x: Horizontal position of upperleft pixel
+        :param y: Vertical position of upperleft pixel
+        :param w: Width of ROI
+        :param h: Height of ROI
+        """
+        self.x = x
+        self.y = y
+        self.w = w
+        self.h = h
+        self.self_check()
+
+    def __iter__(self):
+        return iter((self.x, self.y, self.x + self.w, self.y + self.h))
+
+    def self_check(self):
+        if self.x < 0 or self.y < 0:
+            raise ValueError("For RoI, x and y must be positive")
+        if self.w < 0:
+            raise ValueError("For RoI, width must be positive")
+        if self.h < 0:
+            raise ValueError("For RoI, height must be positive")
+
+    def check(self, dims):
+        self.self_check()
+        if len(dims) != 2:
+            raise ValueError("image must have 2 dimensions")
+        elif self.x + self.w > dims[0] or self.y + self.h > dims[1]:
+            raise ValueError("RoI exceeds image dimensions")
+
+
 class ImageParam(object):
     def __init__(self, th_min: int, th_max: int, th_num: int,
                  ph_min: int, ph_max: int, ph_num: int):
@@ -30,14 +65,62 @@ class ImageParam(object):
                 + "th_step: " + str(self.th_step)
 
 
-class ImagePack(object):
-    def __init__(self, images: list[Image.Image], param: ImageParam):
-        self.images = images
-        self.param = param
-        self.self_check()
+class Images(object):
+    # def __init__(self, images: list[Image.Image], param: ImageParam):
+    #     self.images = images
+    #     self.param = param
+    #     self.self_check()
 
     def __iter__(self):
         return iter((self.images, self.param))
+
+    def __init__(self, folder='images', img_format='jpg', roi: ROI | None = None):
+        """
+        Load sample and background datasets.
+        :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
+        :param folder: The folder where the images are saved.
+        :param img_format: The image format to load.
+        :param roi: The region of interest, a list of length 4.
+        :return: a stack of images, and a 2D array of elevation and azimuth angles of each image.
+        """
+        with open("config.yaml", 'r') as stream:
+            exp_param = yaml.safe_load(stream)
+
+        # Assign parameters locally
+        th_min = exp_param['th_min']
+        th_max = exp_param['th_max']
+        th_num = exp_param['th_num']
+        ph_min = exp_param['ph_min']
+        ph_max = exp_param['ph_max']
+        ph_num = exp_param['ph_num']
+        new_param = ImageParam(th_min, th_max, th_num,
+                               ph_min, ph_max, ph_num)
+        # Set path to load images
+        if folder == '':
+            path = cwd
+        else:
+            path = cwd / folder
+
+        # Search for files with corresponding affix
+        images = []
+        for image_path in tqdm(sorted(path.glob('*.' + img_format)), desc='loading images'):
+            try:
+                image = Image.open(image_path)
+                images.append(image)
+            except IOError:
+                print(f"Could not open image at path: {image_path}")
+
+        num_images = len(images)
+        if num_images != th_num * ph_num:
+            raise ValueError('The number of images loaded does not match angle range')
+        # Convert all images into greyscale
+        for i in tqdm(range(num_images), desc='converting images into greyscale'):
+            images[i] = images[i].convert('L')
+            if roi is not None:
+                imin, jmin, imax, jmax = roi
+                images[i] = images[i].crop((imin, jmin, imax, jmax))
+        self.images = images
+        self.param = new_param
 
     def self_check(self):
         assert isinstance(self.param, ImageParam)
@@ -81,120 +164,25 @@ class ImagePack(object):
         # print(self.param)
         return self.images
 
-
-class ROI:
-    def __init__(self, x, y, w, h):
+    def mask_images(self, mask: np.ndarray, normalize: bool = False) -> list[Image.Image]:
         """
-        Region of interest bounding box.
-        :param x: Horizontal position of upperleft pixel
-        :param y: Vertical position of upperleft pixel
-        :param w: Width of ROI
-        :param h: Height of ROI
+        Apply a mask to all images in the list.
+        Input image will have pixel values between 0 and 255. If any pixel value exceeds 255 after masking, it will be clipped.
+        :param images: Images to be processed.
+        :param mask: A numpy array representing the mask.
+        :param roi: Region of interest; when applied, the masked images will be cropped into this region.
+        :param normalize: Setting to true would normalize masked images.
+        :return: List of processed images.
         """
-        self.x = x
-        self.y = y
-        self.w = w
-        self.h = h
-        self.self_check()
-
-    def __iter__(self):
-        return iter((self.x, self.y, self.x + self.w, self.y + self.h))
-
-    def self_check(self):
-        if self.x < 0 or self.y < 0:
-            raise ValueError("For RoI, x and y must be positive")
-        if self.w < 0:
-            raise ValueError("For RoI, width must be positive")
-        if self.h < 0:
-            raise ValueError("For RoI, height must be positive")
-
-    def check(self, dims):
-        self.self_check()
-        if len(dims) != 2:
-            raise ValueError("image must have 2 dimensions")
-        elif self.x + self.w > dims[0] or self.y + self.h > dims[1]:
-            raise ValueError("RoI exceeds image dimensions")
-
-
-def load_images(path, affix: str) -> list[Image.Image]:
-    """
-    Open all images in a folder and return as a list.
-    :param path: Path to the folder.
-    :param affix: File format to open, dot excluded.
-    :return: A list of image objects of class Image.Image.
-    """
-    images = []
-    for image_path in tqdm(sorted(path.glob('*.' + affix)), desc='loading images'):
-        try:
-            image = Image.open(image_path)
-            images.append(image)
-        except IOError:
-            print(f"Could not open image at path: {image_path}")
-    return images
-
-
-def drp_loader(folder='images', img_format='jpg', roi: ROI | None = None) -> ImagePack:
-    """
-    Load sample and background datasets.
-    :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
-    :param folder: The folder where the images are saved.
-    :param img_format: The image format to load.
-    :param roi: The region of interest, a list of length 4.
-    :return: a stack of images, and a 2D array of elevation and azimuth angles of each image.
-    """
-    with open("config.yaml", 'r') as stream:
-        exp_param = yaml.safe_load(stream)
-
-    # Assign parameters locally
-    th_min = exp_param['th_min']
-    th_max = exp_param['th_max']
-    th_num = exp_param['th_num']
-    ph_min = exp_param['ph_min']
-    ph_max = exp_param['ph_max']
-    ph_num = exp_param['ph_num']
-    new_param = ImageParam(th_min, th_max, th_num,
-                           ph_min, ph_max, ph_num)
-    # Set path to load images
-    if folder == '':
-        path = cwd
-    else:
-        path = cwd / folder
-    images = load_images(path, img_format)
-    num_images = len(images)
-    if num_images != th_num * ph_num:
-        raise ValueError('The number of images loaded does not match angle range')
-    # Convert all images into greyscale
-    for i in tqdm(range(num_images), desc='converting images into greyscale'):
-        images[i] = images[i].convert('L')
-        if roi is not None:
-            imin, jmin, imax, jmax = roi
-            images[i] = images[i].crop((imin, jmin, imax, jmax))
-    pack = ImagePack(images, new_param)
-    return pack
-
-
-def mask_images(images: list[Image.Image], mask: np.ndarray, roi: ROI | None = None, normalize: bool = False) -> list[Image.Image]:
-    """
-    Apply a mask to all images in the list.
-    Input image will have pixel values between 0 and 255. If any pixel value exceeds 255 after masking, it will be clipped.
-    :param images: Images to be processed.
-    :param mask: A numpy array representing the mask.
-    :param roi: Region of interest; when applied, the masked images will be cropped into this region.
-    :param normalize: Setting to true would normalize masked images.
-    :return: List of processed images.
-    """
-    res_list = []
-    for image in tqdm(images, desc='masking images'):
-        arr = np.array(image).astype(np.float64)
-        if roi:
-            imin, jmin, imax, jmax = roi.x, roi.y, roi.x + roi.w, roi.y + roi.h
-            arr = arr[imin:imax, jmin:jmax]
-        if arr.shape != mask.shape:
-            raise ValueError("Shape of mask must match region of interest")
-        arr *= mask
-        if normalize:
-            arr = 255 * (arr - arr.min()) / (arr.max() - arr.min())
-        arr = np.clip(arr, 0, 255).astype(np.uint8)
-        res_img = Image.fromarray(arr)
-        res_list.append(res_img)
-    return res_list
+        res_list = []
+        for image in tqdm(self.images, desc='masking images'):
+            arr = np.array(image).astype(np.float64)
+            if arr.shape != mask.shape:
+                raise ValueError("Shape of mask must match region of interest")
+            arr *= mask
+            if normalize:
+                arr = 255 * (arr - arr.min()) / (arr.max() - arr.min())
+            arr = np.clip(arr, 0, 255).astype(np.uint8)
+            res_img = Image.fromarray(arr)
+            res_list.append(res_img)
+        return res_list
