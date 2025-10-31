@@ -69,9 +69,6 @@ def display_drp(drp_array: np.ndarray, param: ImageParam, cmap='jet', project: s
     phi, theta = np.meshgrid(np.linspace(0, 360 + param.ph_step, param.ph_num + 1),
                              np.linspace(param.th_min, param.th_max + param.th_step, param.th_num + 1))
 
-    print(phi)
-    print(theta)
-
     # Projection mapping, from angles to x-y plane
     if project == "stereo":
         xx = np.cos(np.radians(theta)) * np.cos(np.radians(phi)) / (1 + np.sin(np.radians(theta)))

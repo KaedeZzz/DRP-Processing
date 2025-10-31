@@ -64,7 +64,6 @@ class ImagePack(object):
         indices = np.reshape(indices, (self.param.ph_num, self.param.th_num))
         indices = indices[0::slice_phi_step, 0::slice_theta_step]
         indices = indices.ravel()
-        print(indices)
         self.images = [self.images[i] for i in indices]
 
         self.param.ph_max -= (slice_phi_step - 1) * self.param.ph_step

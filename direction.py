@@ -59,7 +59,7 @@ def drp_direction_map(image_pack: ImagePack, display: bool = True):
         i = k // h
         j = k % h
         drp_mat = drp(image_pack, (i, j))
-        drp_vector = get_drp_direction(drp_mat, attenuation=1.0)
+        drp_vector = get_drp_direction(drp_mat, params, attenuation=1.0)
         x, y = drp_vector
         deg = np.degrees(np.arctan2(y, x))
         mag = np.linalg.norm(drp_vector)

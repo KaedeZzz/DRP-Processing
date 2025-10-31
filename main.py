@@ -6,9 +6,9 @@ from PIL import Image
 from matplotlib import pyplot as plt
 
 if __name__ == "__main__":
-    roi = ROI(0, 0, 400, 400)
+    roi = ROI(0, 0, 384, 216)
     image_pack = drp_loader(roi=roi)
-    image_pack.slice_images(2, 2)
+    image_pack.slice_images(3, 3)
     images, params = image_pack
     mean_drp_mat = area_mean_drp(image_pack, display=True) # display image selected at highest elevation angle
     plt.imshow(mean_drp_mat)
