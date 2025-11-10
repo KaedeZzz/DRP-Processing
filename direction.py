@@ -1,28 +1,10 @@
-import yaml
-from pathlib import Path
 from tqdm import tqdm
 import numpy as np
-from PIL import Image
 from matplotlib import pyplot as plt
 
-from drp_processing import drp
-from utils import Images, ImageParam
+from src import ImagePack
 
-cwd = Path.cwd()
-
-with open("config.yaml", 'r') as stream:
-    exp_param = yaml.safe_load(stream)
-
-# Assign parameters locally
-th_min = exp_param['th_min']
-th_max = exp_param['th_max']
-th_num = exp_param['th_num']
-ph_min = exp_param['ph_min']
-ph_max = exp_param['ph_max']
-ph_num = exp_param['ph_num']
-
-
-def get_drp_direction(drp_mat: np.ndarray, params: ImageParam, attenuation: float = 1.0) -> list:
+def get_drp_direction(drp_mat: np.ndarray, ph_num: int, attenuation: float = 1.0) -> list:
     """
     Calculate overall azimuthal direction of DRP array.
     :param drp_mat: the source DRP array
@@ -33,8 +15,8 @@ def get_drp_direction(drp_mat: np.ndarray, params: ImageParam, attenuation: floa
     res = [0.0, 0.0]
     mat_mean = np.mean(drp_mat)
 
-    for p in range(params.ph_num):
-        phi_deg = p * 360 / params.ph_num
+    for p in range(ph_num):
+        phi_deg = p * 360 / ph_num
         mag = (np.mean(drp_mat[p, :]) - mat_mean) * attenuation
         phi_rad = phi_deg * np.pi / 180
         x, y = mag * np.cos(phi_rad), mag * np.sin(phi_rad)
@@ -44,22 +26,21 @@ def get_drp_direction(drp_mat: np.ndarray, params: ImageParam, attenuation: floa
     return res
 
 
-def drp_direction_map(image_pack: Images, display: bool = True):
+def drp_direction_map(imp: ImagePack, display: bool = True):
     """
     Calculate (and display) the direction map of a DRP over a region of interest.
     :param image_pack: ImagePack instance of images and DRP parameters.
     :param display: whether to display the direction map on screen.
     :return: direction map in 2D NumPy array [width, height].
     """
-    images, params = image_pack
-    w, h = images[0].size
+    w, h = imp.w, imp.h
     mag_map = np.zeros((w, h))
     deg_map = np.zeros((w, h))
     for k in tqdm(range(w * h), desc='Generating DRP direction map'):
         i = k // h
         j = k % h
-        drp_mat = drp(image_pack, (i, j))
-        drp_vector = get_drp_direction(drp_mat, params, attenuation=1.0)
+        drp_mat = imp.drp(loc=(i, j))
+        drp_vector = get_drp_direction(drp_mat, ph_num=imp.ph_num, attenuation=1.0)
         x, y = drp_vector
         deg = np.degrees(np.arctan2(y, x))
         mag = np.linalg.norm(drp_vector)
@@ -74,7 +55,7 @@ def drp_direction_map(image_pack: Images, display: bool = True):
     # display the magnitude vector maps
     if display:
         fig, axes = plt.subplots(figsize=(13, 4), ncols=3)
-        im1 = axes[0].imshow(images[th_num - 1], cmap="gray")
+        im1 = axes[0].imshow(imp.images[imp.th_num - 1], cmap="gray")
         fig.colorbar(im1, ax=axes[0])
         axes[0].set_title("ROI image")
         im2 = axes[1].imshow(norm_mag_map.T, cmap='afmhot')

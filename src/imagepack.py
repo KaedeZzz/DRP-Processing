@@ -135,9 +135,10 @@ class ImagePack(object):
         res_list = []
         for image in tqdm(self.images, desc='masking images'):
             arr = np.array(image).astype(np.float64)
-            if arr.shape != mask.shape:
+            if arr.shape != mask.T.shape:
+                print(arr.shape, mask.T.shape)
                 raise ValueError("Shape of mask must match region of interest")
-            arr *= mask
+            arr *= mask.T
             if normalize:
                 arr = 255 * (arr - arr.min()) / (arr.max() - arr.min())
             arr = np.clip(arr, 0, 255).astype(np.uint8)
