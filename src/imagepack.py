@@ -8,7 +8,9 @@ from matplotlib import pyplot as plt
 from pathlib import Path
 import yaml
 
+
 cwd = Path.cwd()
+
 
 class ImagePack(object):
     # def __init__(self, images: list[Image.Image], param: ImageParam):
@@ -16,16 +18,22 @@ class ImagePack(object):
     #     self.param = param
     #     self.self_check()
 
-    def __init__(self, folder='images', img_format='jpg', roi: ROI | None = None):
+    def __init__(self, folder='images', img_format='jpg', roi: ROI | None = None, angle_slice: tuple[int, int] = (1, 1)):
         """
-        Load sample and background datasets.
-        :param exp_param: The experiment parameters, namely elevation and azimuth angle ranges.
-        :param folder: The folder where the images are saved.
-        :param img_format: The image format to load.
-        :param roi: The region of interest, a list of length 4.
-        :return: a stack of images, and a 2D array of elevation and azimuth angles of each image.
+        Load sample datasets. Images will be converted into greyscale automatically.
+        :param folder: folder path containing images to be loaded.
+        :param img_format: image file format/extension.
+        :param roi: region of interest to crop images into. If None, full images will be used.
+        :param read_mode: if True, then DRP data will be directly read from file.
+        :param slice: tuple of (phi_slice, theta_slice) to reduce image set resolution in DRP angles. Only required when read_mode is False.
         """
-        with open("config.yaml", 'r') as stream:
+        # Set path to load images
+        if folder == '':
+            path = cwd
+        else:
+            path = cwd / folder
+
+        with open("exp_param.yaml", 'r') as stream:
             exp_param = yaml.safe_load(stream)
 
         # Assign parameters locally
@@ -35,13 +43,10 @@ class ImagePack(object):
         ph_min = exp_param['ph_min']
         ph_max = exp_param['ph_max']
         ph_num = exp_param['ph_num']
+        ph_slice = exp_param.get('phi_slice', 1)
+        th_slice = exp_param.get('theta_slice', 1)
         new_param = ImageParam(th_min, th_max, th_num,
                                ph_min, ph_max, ph_num)
-        # Set path to load images
-        if folder == '':
-            path = cwd
-        else:
-            path = cwd / folder
 
         # Search for files with corresponding affix
         images = []
@@ -51,10 +56,8 @@ class ImagePack(object):
                 images.append(image)
             except IOError:
                 print(f"Could not open image at path: {image_path}")
-
         self.num_images = len(images)
-        if self.num_images != th_num * ph_num:
-            raise ValueError('The number of images loaded does not match angle range')
+        
         # Convert all images into greyscale
         for i in tqdm(range(self.num_images), desc='converting images into greyscale'):
             images[i] = images[i].convert('L')
@@ -62,25 +65,64 @@ class ImagePack(object):
                 imin, jmin, imax, jmax = roi
                 images[i] = images[i].crop((imin, jmin, imax, jmax))
 
+        # Assign attributes
         self.images = images
         self.w, self.h = self.images[0].size
         self.param = new_param # Legacy, attemp not to use
         self.__dict__.update(new_param.__dict__) # Copy all attributes from ImageParam
 
+        if (cwd / 'data_config.yaml').exists() and (cwd / 'drp.dat').exists():
+            print('Reading DRP data from file...')
+            with open('data_config.yaml', 'r') as file:
+                saved_config = yaml.safe_load(file)
+                ph_slice = saved_config.get('ph_slice', 1)
+                th_slice = saved_config.get('th_slice', 1)
+                angle_slice = (ph_slice, th_slice)
+                self.slice_images(angle_slice)
+                shape = (self.w, self.h, self.ph_num, self.th_num)   
+                drp_stack = np.memmap('drp.dat', dtype='uint8', mode='r+', shape=shape)
+                self.drp_stack = drp_stack
+            
+        else:
+            # Write drp_config.yaml and generate drp.dat if not in read mode
+            config = {
+                "th_min": self.th_min,
+                "th_max": self.th_max,
+                "th_num": self.th_num,
+                "ph_min": self.ph_min,
+                "ph_max": self.ph_max,
+                "ph_num": self.ph_num,
+                "ph_slice": angle_slice[0],
+                "th_slice": angle_slice[1],
+            }
+            with open('data_config.yaml', 'w') as file:
+                yaml.dump(config, file)
+            self.slice_images(angle_slice)
+            shape = (self.w, self.h, self.ph_num, self.th_num)
+            self.get_drp_stack()
+        
+        return
+    
+
     def __iter__(self):
         return iter((self.images, self.param))
+    
+    def slice_indices(self, angle_slice: tuple[int, int]) -> np.ndarray:
+        (ph_slice, th_slice) = angle_slice
+        if ph_slice <= 0 or th_slice <= 0:
+            raise ValueError('phi_step and theta_step must be positive.')
+        if self.ph_num % ph_slice != 0:
+            raise ValueError('ph_num must be divisible by phi_step.')
+        if self.th_num % th_slice != 0:
+            raise ValueError('theta_num {} must be divisible by theta_step {}.', self.th_num, th_slice)
+        indices = np.array([i for i in range(len(self.images))]).astype(int)
+        indices = np.reshape(indices, (self.ph_num, self.th_num))
+        indices = indices[0::ph_slice, 0::th_slice]
+        indices = indices.ravel()
+        return indices
+    
 
-    def self_check(self):
-        # assert isinstance(self.param, ImageParam)
-        assert isinstance(self.images[0], Image.Image)
-
-    def reset(self):
-        self.w, self.h = self.images[0].size
-        self.num_images = len(self.images)
-        if self.num_images != self.ph_num * self.th_num:
-            raise ValueError('Number of images does not match number of angles.')
-
-    def slice_images(self, slice_phi_step: int, slice_theta_step: int) -> list[Image.Image]:
+    def slice_images(self, angle_slice: tuple[int, int]) -> list[Image.Image]:
         """
         Reduce image set resolution in DRP angles by selecting one image from each M phi angles and N theta angles.
         Total numbers of angles must be divisible by the slice step of each angle.
@@ -88,32 +130,24 @@ class ImagePack(object):
         :param slice_theta_step: retain an image from each *phi_step* phi angles.
         :return: sliced images and angle profiles.
         """
-        if slice_phi_step <= 0 or slice_theta_step <= 0:
-            raise ValueError('phi_step and theta_step must be positive.')
-        if self.ph_num % slice_phi_step != 0:
-            raise ValueError('ph_num must be divisible by phi_step.')
-        if self.th_num % slice_theta_step != 0:
-            raise ValueError('theta_step must be divisible by theta_step.')
         if self.num_images != self.ph_num * self.th_num:
             raise ValueError('Number of images does not match number of angles.')
-
-        indices = np.array([i for i in range(len(self.images))]).astype(int)
-        indices = np.reshape(indices, (self.ph_num, self.th_num))
-        indices = indices[0::slice_phi_step, 0::slice_theta_step]
-        indices = indices.ravel()
+        
+        ph_slice, th_slice = angle_slice
+        indices = self.slice_indices(angle_slice)
         self.images = [self.images[i] for i in indices]
 
-        self.ph_max -= (slice_phi_step - 1) * self.ph_step
+        self.ph_max -= (ph_slice - 1) * self.ph_step
         self.ph_max = int(self.ph_max)
-        self.ph_num /= slice_phi_step
+        self.ph_num /= ph_slice
         self.ph_num = int(self.ph_num)
-        self.ph_step *= slice_phi_step
+        self.ph_step *= ph_slice
         self.ph_step = int(self.ph_step)
-        self.th_max -= (slice_theta_step - 1) * self.th_step
+        self.th_max -= (th_slice - 1) * self.th_step
         self.th_max = int(self.th_max)
-        self.th_num /= slice_theta_step
+        self.th_num /= th_slice
         self.th_num = int(self.th_num)
-        self.th_step *= slice_theta_step
+        self.th_step *= th_slice
         self.th_step = int(self.th_step)
 
         self.num_images = len(self.images)
@@ -121,6 +155,7 @@ class ImagePack(object):
             raise ValueError('Number of images {} does not match number of angles.'.format(self.num_images))
         
         return self.images
+
 
     def mask_images(self, mask: np.ndarray, normalize: bool = False) -> list[Image.Image]:
         """
@@ -146,7 +181,8 @@ class ImagePack(object):
             res_list.append(res_img)
         return res_list
     
-    def drp(self, loc) -> np.ndarray:
+
+    def drp(self, loc, mode='kernel') -> np.ndarray:
         """
         Calculate DRP for a single pixel.
         :param image_pack: ImagePack instance of input images and DRP parameters.
@@ -155,11 +191,15 @@ class ImagePack(object):
         """
         x, y = loc
         drp_array = np.zeros((self.ph_num, self.th_num))
-        for k in range(self.num_images):
-            i = k // self.th_num
-            j = k % self.th_num
-            drp_array[i, j] = self.images[k].getpixel((x, y))
+        if mode == 'pixel':
+            for k in range(self.num_images):
+                i = k // self.th_num
+                j = k % self.th_num
+                drp_array[i, j] = self.images[k].getpixel((x, y))
+        elif mode == 'kernel':
+            drp_array = self.drp_stack[x, y, :, :]
         return drp_array
+
 
     def plot_drp(self, drp_array, cmap='jet', project: str = 'stereo', ax = None) -> plt.Axes:
         """
@@ -200,15 +240,38 @@ class ImagePack(object):
         plt.colorbar(h, ax=ax)
         return ax
     
-    def get_mean_drp(self) -> np.ndarray:
+
+    def get_mean_drp(self, mode='kernel') -> np.ndarray:
         """
         Calculate the mean DRP over all pixels in the image set.
         :return: a 2D Numpy array representing the mean DRP data. [th_num x ph_num]
         """
         w, h = self.images[0].size
         drp_array = np.zeros((self.ph_num, self.th_num))
-        for i in tqdm(range(w * h), desc='Calculating mean DRP'):
+        if mode == 'pixel':
+            for i in tqdm(range(w * h), desc='Calculating mean DRP'):
+                col = i // h
+                row = i % h
+                drp_array += (self.drp_kernel(loc=(col, row)) / (w * h))
+        elif mode == 'kernel':
+            drp_array = np.mean(self.drp_stack, axis=(0,1))
+        return drp_array
+
+
+    def get_drp_stack(self) -> None:
+        """
+        Generate a 4D NumPy array representing the DRP data for all pixels.
+        """
+        w, h = self.w, self.h
+        shape = (w, h, self.ph_num, self.th_num)
+        drp_stack = np.memmap('drp.dat', dtype='uint8', mode='w+', shape=shape)
+
+        for i in tqdm(range(w * h), desc='Generating DRP stack'):
             col = i // h
             row = i % h
-            drp_array += (self.drp(loc=(col, row)) / (w * h))
-        return drp_array
+            drp_stack[col, row, :, :] = self.drp(loc=(col, row), mode='pixel')
+            if i % 50 == 0: # Beware of memory limit! Do not load too much per flush.
+                drp_stack.flush()
+        self.drp_stack = drp_stack
+        return
+    

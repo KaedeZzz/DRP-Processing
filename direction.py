@@ -36,16 +36,14 @@ def drp_direction_map(imp: ImagePack, display: bool = True):
     w, h = imp.w, imp.h
     mag_map = np.zeros((w, h))
     deg_map = np.zeros((w, h))
-    for k in tqdm(range(w * h), desc='Generating DRP direction map'):
-        i = k // h
-        j = k % h
-        drp_mat = imp.drp(loc=(i, j))
-        drp_vector = get_drp_direction(drp_mat, ph_num=imp.ph_num, attenuation=1.0)
-        x, y = drp_vector
-        deg = np.degrees(np.arctan2(y, x))
-        mag = np.linalg.norm(drp_vector)
-        mag_map[i, j] = mag
-        deg_map[i, j] = deg
+    phi_vec = np.mean(imp.drp_stack, axis=3) # shape: [w, h, ph_num]
+    mean_mat = np.repeat(np.mean(phi_vec, axis=2)[:, :, np.newaxis], repeats=imp.ph_num, axis=2)
+    X = ((phi_vec - mean_mat) @ np.cos(np.linspace(0, 2 * np.pi, imp.ph_num, endpoint=False)[:, None]))
+    Y = ((phi_vec - mean_mat) @ np.sin(np.linspace(0, 2 * np.pi, imp.ph_num, endpoint=False)[:, None]))
+    X = np.reshape(X, (w, h))
+    Y = np.reshape(Y, (w, h))
+    mag_map = np.sqrt(X**2 + Y**2)
+    deg_map = np.degrees(np.arctan2(Y, X))
 
     # clip extreme values, normalise
     mat_mean = np.mean(mag_map)
