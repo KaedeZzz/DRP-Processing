@@ -34,14 +34,17 @@ def drp_direction_map(imp: ImagePack, display: bool = True):
     :return: direction map in 2D NumPy array [width, height].
     """
     w, h = imp.w, imp.h
-    mag_map = np.zeros((w, h))
-    deg_map = np.zeros((w, h))
-    phi_vec = np.mean(imp.drp_stack, axis=3) # shape: [w, h, ph_num]
+    mag_map = np.zeros((h, w))
+    deg_map = np.zeros((h, w))
+    phi_vec = np.mean(imp.drp_stack, axis=3) # shape: [h, w, ph_num]
+    print(np.mean(phi_vec))
+    print(np.mean(np.abs(phi_vec)))
     mean_mat = np.repeat(np.mean(phi_vec, axis=2)[:, :, np.newaxis], repeats=imp.ph_num, axis=2)
     X = ((phi_vec - mean_mat) @ np.cos(np.linspace(0, 2 * np.pi, imp.ph_num, endpoint=False)[:, None]))
     Y = ((phi_vec - mean_mat) @ np.sin(np.linspace(0, 2 * np.pi, imp.ph_num, endpoint=False)[:, None]))
-    X = np.reshape(X, (w, h))
-    Y = np.reshape(Y, (w, h))
+    print(X.shape, Y.shape)
+    X = np.reshape(X, (h, w))
+    Y = np.reshape(Y, (h, w))
     mag_map = np.sqrt(X**2 + Y**2)
     deg_map = np.degrees(np.arctan2(Y, X))
 
@@ -56,10 +59,10 @@ def drp_direction_map(imp: ImagePack, display: bool = True):
         im1 = axes[0].imshow(imp.images[imp.th_num - 1], cmap="gray")
         fig.colorbar(im1, ax=axes[0])
         axes[0].set_title("ROI image")
-        im2 = axes[1].imshow(norm_mag_map.T, cmap='afmhot')
+        im2 = axes[1].imshow(norm_mag_map, cmap='afmhot')
         fig.colorbar(im2, ax=axes[1])
         axes[1].set_title("Normalised DRP magnitudes")
-        im3 = axes[2].imshow(deg_map.T, cmap='hsv')
+        im3 = axes[2].imshow(deg_map, cmap='hsv')
         axes[2].set_title("DRP angles")
         fig.colorbar(im3, ax=axes[2])
         plt.show()

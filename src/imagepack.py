@@ -1,7 +1,7 @@
 from .imageparam import ImageParam
 from .roi import ROI
 
-from PIL import Image
+import cv2
 from tqdm import tqdm
 import numpy as np
 from matplotlib import pyplot as plt
@@ -52,7 +52,7 @@ class ImagePack(object):
         images = []
         for image_path in tqdm(sorted(path.glob('*.' + img_format)), desc='loading images'):
             try:
-                image = Image.open(image_path)
+                image = cv2.imread(str(image_path))
                 images.append(image)
             except IOError:
                 print(f"Could not open image at path: {image_path}")
@@ -60,14 +60,14 @@ class ImagePack(object):
         
         # Convert all images into greyscale
         for i in tqdm(range(self.num_images), desc='converting images into greyscale'):
-            images[i] = images[i].convert('L')
+            images[i] = cv2.cvtColor(images[i], cv2.COLOR_BGR2GRAY)
             if roi is not None:
                 imin, jmin, imax, jmax = roi
-                images[i] = images[i].crop((imin, jmin, imax, jmax))
+                images[i] = images[i][jmin:jmax, imin:imax]
 
         # Assign attributes
         self.images = images
-        self.w, self.h = self.images[0].size
+        self.h, self.w = self.images[0].shape
         self.param = new_param # Legacy, attemp not to use
         self.__dict__.update(new_param.__dict__) # Copy all attributes from ImageParam
 
@@ -79,7 +79,7 @@ class ImagePack(object):
                 th_slice = saved_config.get('th_slice', 1)
                 angle_slice = (ph_slice, th_slice)
                 self.slice_images(angle_slice)
-                shape = (self.w, self.h, self.ph_num, self.th_num)   
+                shape = (self.h, self.w, self.ph_num, self.th_num)   
                 drp_stack = np.memmap('drp.dat', dtype='uint8', mode='r+', shape=shape)
                 self.drp_stack = drp_stack
             
@@ -100,7 +100,7 @@ class ImagePack(object):
             self.slice_images(angle_slice)
             shape = (self.w, self.h, self.ph_num, self.th_num)
             self.get_drp_stack()
-        
+
         return
     
 
@@ -122,7 +122,7 @@ class ImagePack(object):
         return indices
     
 
-    def slice_images(self, angle_slice: tuple[int, int]) -> list[Image.Image]:
+    def slice_images(self, angle_slice: tuple[int, int]) -> list[np.array]:
         """
         Reduce image set resolution in DRP angles by selecting one image from each M phi angles and N theta angles.
         Total numbers of angles must be divisible by the slice step of each angle.
@@ -157,7 +157,7 @@ class ImagePack(object):
         return self.images
 
 
-    def mask_images(self, mask: np.ndarray, normalize: bool = False) -> list[Image.Image]:
+    def mask_images(self, mask: np.ndarray, normalize: bool = False) -> list[np.array]:
         """
         Apply a mask to all images in the list.
         Input image will have pixel values between 0 and 255. If any pixel value exceeds 255 after masking, it will be clipped.
@@ -177,8 +177,7 @@ class ImagePack(object):
             if normalize:
                 arr = 255 * (arr - arr.min()) / (arr.max() - arr.min())
             arr = np.clip(arr, 0, 255).astype(np.uint8)
-            res_img = Image.fromarray(arr)
-            res_list.append(res_img)
+            res_list.append(arr)
         return res_list
     
 
@@ -189,15 +188,15 @@ class ImagePack(object):
         :param loc: location of the pixel.
         :return: a 2D Numpy array representing the DRP data. [th_num x ph_num]
         """
-        x, y = loc
+        y, x = loc
         drp_array = np.zeros((self.ph_num, self.th_num))
         if mode == 'pixel':
             for k in range(self.num_images):
                 i = k // self.th_num
                 j = k % self.th_num
-                drp_array[i, j] = self.images[k].getpixel((x, y))
+                drp_array[i, j] = self.images[k][y, x]
         elif mode == 'kernel':
-            drp_array = self.drp_stack[x, y, :, :]
+            drp_array = self.drp_stack[y, x, :, :]
         return drp_array
 
 
@@ -246,7 +245,7 @@ class ImagePack(object):
         Calculate the mean DRP over all pixels in the image set.
         :return: a 2D Numpy array representing the mean DRP data. [th_num x ph_num]
         """
-        w, h = self.images[0].size
+        w, h = self.images[0].shape
         drp_array = np.zeros((self.ph_num, self.th_num))
         if mode == 'pixel':
             for i in tqdm(range(w * h), desc='Calculating mean DRP'):
@@ -262,14 +261,13 @@ class ImagePack(object):
         """
         Generate a 4D NumPy array representing the DRP data for all pixels.
         """
-        w, h = self.w, self.h
-        shape = (w, h, self.ph_num, self.th_num)
+        shape = (self.h, self.w, self.ph_num, self.th_num)
         drp_stack = np.memmap('drp.dat', dtype='uint8', mode='w+', shape=shape)
 
-        for i in tqdm(range(w * h), desc='Generating DRP stack'):
-            col = i // h
-            row = i % h
-            drp_stack[col, row, :, :] = self.drp(loc=(col, row), mode='pixel')
+        for i in tqdm(range(self.h * self.w), desc='Generating DRP stack'):
+            col = i // self.h
+            row = i % self.h
+            drp_stack[row, col, :, :] = self.drp(loc=(row, col), mode='pixel')
             if i % 50 == 0: # Beware of memory limit! Do not load too much per flush.
                 drp_stack.flush()
         self.drp_stack = drp_stack
