@@ -37,12 +37,9 @@ def drp_direction_map(imp: ImagePack, display: bool = True):
     mag_map = np.zeros((h, w))
     deg_map = np.zeros((h, w))
     phi_vec = np.mean(imp.drp_stack, axis=3) # shape: [h, w, ph_num]
-    print(np.mean(phi_vec))
-    print(np.mean(np.abs(phi_vec)))
     mean_mat = np.repeat(np.mean(phi_vec, axis=2)[:, :, np.newaxis], repeats=imp.ph_num, axis=2)
     X = ((phi_vec - mean_mat) @ np.cos(np.linspace(0, 2 * np.pi, imp.ph_num, endpoint=False)[:, None]))
     Y = ((phi_vec - mean_mat) @ np.sin(np.linspace(0, 2 * np.pi, imp.ph_num, endpoint=False)[:, None]))
-    print(X.shape, Y.shape)
     X = np.reshape(X, (h, w))
     Y = np.reshape(Y, (h, w))
     mag_map = np.sqrt(X**2 + Y**2)
@@ -56,7 +53,7 @@ def drp_direction_map(imp: ImagePack, display: bool = True):
     # display the magnitude vector maps
     if display:
         fig, axes = plt.subplots(figsize=(13, 4), ncols=3)
-        im1 = axes[0].imshow(imp.images[imp.th_num - 1], cmap="gray")
+        im1 = axes[0].imshow(imp.images[0], cmap="gray")
         fig.colorbar(im1, ax=axes[0])
         axes[0].set_title("ROI image")
         im2 = axes[1].imshow(norm_mag_map, cmap='afmhot')
