@@ -56,7 +56,7 @@ def drp_direction_map(imp: ImagePack, display: bool = True):
     # display the magnitude vector maps
     if display:
         fig, axes = plt.subplots(figsize=(13, 4), ncols=3)
-        im1 = axes[0].imshow(imp.images[imp.th_num - 1], cmap="gray")
+        im1 = axes[0].imshow(imp.images[0], cmap="gray")
         fig.colorbar(im1, ax=axes[0])
         axes[0].set_title("ROI image")
         im2 = axes[1].imshow(norm_mag_map, cmap='afmhot')
