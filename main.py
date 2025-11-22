@@ -34,22 +34,15 @@ if __name__ == "__main__":
     plt.show()
 
     """Downsampling and Averaging"""
-    img_downsample = img[::2, ::2]
-    img_downsample = cv2.blur(img_downsample, (13, 13))
-    img_downsample = cv2.blur(img_downsample, (17, 17))
-    img_downsample = cv2.blur(img_downsample, (21, 21))
-    plt.imshow(img_downsample, cmap='gray')
-    plt.show()
-
-    """Downsampling and Gaussian Blurring"""
-    # img_downsample = img[::4, ::4]
-    # img_downsample = cv2.GaussianBlur(img_downsample, (21, 21), sigmaX=0)
-    # plt.imshow(img_downsample.T, cmap='gray')
-    # plt.title('Downsampled Image')
+    # img = img[::2, ::2]
+    # img = cv2.blur(img, (13, 13))
+    # img = cv2.blur(img, (17, 17))
+    # img = cv2.blur(img, (21, 21))
+    # plt.imshow(img, cmap='gray')
     # plt.show()
 
     """Hough Transform for line detection"""
-    # accumulator, rhos, thetas = hough_transform(img_downsample, rho_res=1, theta_res=1)
+    # accumulator, rhos, thetas = hough_transform(img, rho_res=1, theta_res=1)
     # peaks = find_hough_peaks(accumulator, num_peaks=10, threshold=1000)
     # plt.figure(figsize=(10, 6))
     # plt.imshow(accumulator, cmap='hot', aspect=0.02)
@@ -60,7 +53,7 @@ if __name__ == "__main__":
     # plt.show()
 
     """Column Stacking Profile"""
-    img_stacked = np.mean(img_downsample, axis=0)
+    img_stacked = np.mean(img, axis=0)
     plt.plot(img_stacked)
     plt.title('Stacked Image Intensity Profile')
     plt.xlabel('Pixel Position')
