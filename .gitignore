@@ -1,4 +1,5 @@
-/images
+/sample
+/processed
 __pycache__
 .venv
 drp.dat

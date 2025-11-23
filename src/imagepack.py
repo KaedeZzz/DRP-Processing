@@ -18,7 +18,7 @@ class ImagePack(object):
     #     self.param = param
     #     self.self_check()
 
-    def __init__(self, folder='images', img_format='jpg', roi: ROI | None = None, angle_slice: tuple[int, int] = (1, 1)):
+    def __init__(self, folder='processed', img_format='jpg', angle_slice: tuple[int, int] = (1, 1)):
         """
         Load sample datasets. Images will be converted into greyscale automatically.
         :param folder: folder path containing images to be loaded.
@@ -52,21 +52,22 @@ class ImagePack(object):
         images = []
         for image_path in tqdm(sorted(path.glob('*.' + img_format)), desc='loading images'):
             try:
-                image = cv2.imread(str(image_path))
+                image = cv2.imread(str(image_path), flags=cv2.IMREAD_GRAYSCALE)
                 images.append(image)
             except IOError:
                 print(f"Could not open image at path: {image_path}")
         self.num_images = len(images)
         
         # Convert all images into greyscale
-        for i in tqdm(range(self.num_images), desc='converting images into greyscale'):
-            images[i] = cv2.cvtColor(images[i], cv2.COLOR_BGR2GRAY)
-            if roi is not None:
-                imin, jmin, imax, jmax = roi
-                images[i] = images[i][jmin:jmax, imin:imax]
+        # for i in tqdm(range(self.num_images), desc='converting images into greyscale'):
+        #     images[i] = cv2.cvtColor(images[i], cv2.COLOR_BGR2GRAY)
+        #     if roi is not None:
+        #         imin, jmin, imax, jmax = roi
+        #         images[i] = images[i][jmin:jmax, imin:imax]
 
         # Assign attributes
         self.images = images
+        print(self.images[0].shape)
         self.h, self.w = self.images[0].shape
         self.param = new_param # Legacy, attemp not to use
         self.__dict__.update(new_param.__dict__) # Copy all attributes from ImageParam
