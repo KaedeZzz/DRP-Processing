@@ -1,4 +1,5 @@
 import numpy as np
+import scipy
 from matplotlib import pyplot as plt
 import cv2
 
@@ -10,8 +11,7 @@ from src.line_detection import hough_transform, find_hough_peaks
 if __name__ == "__main__":
 
     """Initialise Images and DRP data"""
-    roi = ROI(0, 0, 1920, 1080)
-    images = ImagePack(roi=roi, angle_slice=(2, 2))
+    images = ImagePack(angle_slice=(2, 2))
 
     """Mean Image"""
     # mean_img = np.mean(images.images, axis=0).astype(np.uint8)
@@ -20,13 +20,13 @@ if __name__ == "__main__":
     # plt.show()
 
     """Area mean DRP"""
-    ax = images.plot_drp(images.get_mean_drp(), cmap='jet')
-    plt.show()
+    # ax = images.plot_drp(images.get_mean_drp(), cmap='jet')
+    # plt.show()
 
     """Direction Map"""
     mag_map, deg_map = drp_direction_map(images)
     img_mask = drp_mask_angle(mag_map, deg_map, orientation=90, threshold=45)
-    norm_deg_map = 0.5 * (np.sin(np.radians(deg_map)) + 1)
+    norm_deg_map = 0.5 * (-np.sin(np.radians(deg_map)) + 1)
     # plt.imshow(norm_deg_map.T, cmap='gray')
     # plt.show()
     img = (norm_deg_map * 255).astype(np.uint8)
@@ -34,12 +34,12 @@ if __name__ == "__main__":
     plt.show()
 
     """Downsampling and Averaging"""
-    # img = img[::2, ::2]
-    # img = cv2.blur(img, (13, 13))
-    # img = cv2.blur(img, (17, 17))
-    # img = cv2.blur(img, (21, 21))
-    # plt.imshow(img, cmap='gray')
-    # plt.show()
+    img = img[::2, ::2]
+    img = cv2.blur(img, (13, 13))
+    img = cv2.blur(img, (17, 17))
+    img = cv2.blur(img, (21, 21))
+    plt.imshow(img, cmap='gray')
+    plt.show()
 
     """Hough Transform for line detection"""
     # accumulator, rhos, thetas = hough_transform(img, rho_res=1, theta_res=1)
@@ -59,15 +59,23 @@ if __name__ == "__main__":
     plt.xlabel('Pixel Position')
     plt.ylabel('Average Intensity')
     plt.show()
-    img_stacked_d = np.convolve(img_stacked, [-0.5, 0, 0.5], mode='same')
-    plt.plot(img_stacked_d[2:-2])
-    plt.title('First Derivative of Stacked Profile')
-    plt.xlabel('Pixel Position')
-    plt.ylabel('First Derivative Intensity')
-    plt.show()
+    # img_stacked_d = np.convolve(img_stacked, [-0.5, 0, 0.5], mode='same')
+    # plt.plot(img_stacked_d[2:-2])
+    # plt.title('First Derivative of Stacked Profile')
+    # plt.xlabel('Pixel Position')
+    # plt.ylabel('First Derivative Intensity')
+    # plt.show()
 
     """Masking images based on DRP orientation"""
     # masked_images = images.mask_images(0.5 * (np.sin(np.radians(deg_map)) + 1), normalize=True)
     # for i in range(len(masked_images)):
     #     if i % 30 == 0:
     #         masked_images[i].show()
+
+    peaks, props = scipy.signal.find_peaks(img_stacked)
+    line_thickness = 3
+    line_color = (0, 0, 0)  # Black color in BGR
+    for peak in peaks:
+        cv2.line(img, (peak, 0), (peak, img.shape[0]), line_color, line_thickness)
+    plt.imshow(img, cmap='gray')
+    plt.show()
