@@ -1,12 +1,15 @@
 from tqdm import tqdm
-import pathlib
 import numpy as np
 import cv2
 from matplotlib import pyplot as plt
 
+from src.paths import DataPaths
+
+
 if __name__ == "__main__":
+    paths = DataPaths.from_root("data")
     images = []
-    img_paths = sorted(pathlib.Path.cwd().glob('processed/*.*'))   
+    img_paths = sorted(paths.processed.glob('*.*'))
     ind = 18 * 16 + 1
     for img_path in img_paths[ind:ind+1]:
         try:
@@ -34,5 +37,7 @@ if __name__ == "__main__":
             plt.show()
         except IOError:
             print(f"Could not open image at path: {img_path}")
+    background_dir = paths.cache / 'background'
+    background_dir.mkdir(parents=True, exist_ok=True)
     for i in tqdm(range(len(images)), desc='saving blurred images'):
-        cv2.imwrite(str(pathlib.Path.cwd() / 'background' / img_paths[i].name), images[i])
+        cv2.imwrite(str(background_dir / img_paths[i].name), images[i])

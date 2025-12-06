@@ -1,5 +1,6 @@
 from .imageparam import ImageParam
 from .roi import ROI
+from .paths import DataPaths
 
 import cv2
 from tqdm import tqdm
@@ -9,16 +10,20 @@ from pathlib import Path
 import yaml
 
 
-cwd = Path.cwd()
-
-
 class ImagePack(object):
     # def __init__(self, images: list[Image.Image], param: ImageParam):
     #     self.images = images
     #     self.param = param
     #     self.self_check()
 
-    def __init__(self, folder='processed', img_format='jpg', angle_slice: tuple[int, int] = (1, 1)):
+    def __init__(
+        self,
+        folder: str | Path | None = None,
+        img_format: str = 'jpg',
+        angle_slice: tuple[int, int] = (1, 1),
+        data_root: str | Path = "data",
+        config_path: str | Path | None = None,
+    ):
         """
         Load sample datasets. Images will be converted into greyscale automatically.
         :param folder: folder path containing images to be loaded.
@@ -27,13 +32,23 @@ class ImagePack(object):
         :param read_mode: if True, then DRP data will be directly read from file.
         :param slice: tuple of (phi_slice, theta_slice) to reduce image set resolution in DRP angles. Only required when read_mode is False.
         """
-        # Set path to load images
-        if folder == '':
-            path = cwd
-        else:
-            path = cwd / folder
+        paths = DataPaths.from_root(data_root)
+        self.paths = paths
 
-        with open("exp_param.yaml", 'r') as stream:
+        # Resolve path to load images
+        if folder is None:
+            path = paths.processed
+        else:
+            folder_path = Path(folder)
+            path = folder_path if folder_path.is_absolute() else paths.root / folder_path
+
+        # Resolve experiment config path (defaults to repo root exp_param.yaml)
+        repo_root = Path(__file__).resolve().parent.parent
+        config_path = Path(config_path) if config_path is not None else repo_root / "exp_param.yaml"
+        if not config_path.is_absolute():
+            config_path = repo_root / config_path
+
+        with open(config_path, 'r') as stream:
             exp_param = yaml.safe_load(stream)
 
         # Assign parameters locally
@@ -71,17 +86,19 @@ class ImagePack(object):
         self.h, self.w = self.images[0].shape
         self.param = new_param # Legacy, attemp not to use
         self.__dict__.update(new_param.__dict__) # Copy all attributes from ImageParam
+        self.drp_path = paths.cache / 'drp.dat'
+        data_config_path = paths.cache / 'data_config.yaml'
 
-        if (cwd / 'data_config.yaml').exists() and (cwd / 'drp.dat').exists():
+        if data_config_path.exists() and self.drp_path.exists():
             print('Reading DRP data from file...')
-            with open('data_config.yaml', 'r') as file:
+            with open(data_config_path, 'r') as file:
                 saved_config = yaml.safe_load(file)
                 ph_slice = saved_config.get('ph_slice', 1)
                 th_slice = saved_config.get('th_slice', 1)
                 angle_slice = (ph_slice, th_slice)
                 self.slice_images(angle_slice)
                 shape = (self.h, self.w, self.ph_num, self.th_num)   
-                drp_stack = np.memmap('drp.dat', dtype='uint8', mode='r+', shape=shape)
+                drp_stack = np.memmap(self.drp_path, dtype='uint8', mode='r+', shape=shape)
                 self.drp_stack = drp_stack
             
         else:
@@ -96,7 +113,8 @@ class ImagePack(object):
                 "ph_slice": angle_slice[0],
                 "th_slice": angle_slice[1],
             }
-            with open('data_config.yaml', 'w') as file:
+            paths.cache.mkdir(parents=True, exist_ok=True)
+            with open(data_config_path, 'w') as file:
                 yaml.dump(config, file)
             self.slice_images(angle_slice)
             shape = (self.w, self.h, self.ph_num, self.th_num)
@@ -123,7 +141,7 @@ class ImagePack(object):
         return indices
     
 
-    def slice_images(self, angle_slice: tuple[int, int]) -> list[np.array]:
+    def slice_images(self, angle_slice: tuple[int, int]) -> list[np.ndarray]:
         """
         Reduce image set resolution in DRP angles by selecting one image from each M phi angles and N theta angles.
         Total numbers of angles must be divisible by the slice step of each angle.
@@ -158,7 +176,7 @@ class ImagePack(object):
         return self.images
 
 
-    def mask_images(self, mask: np.ndarray, normalize: bool = False) -> list[np.array]:
+    def mask_images(self, mask: np.ndarray, normalize: bool = False) -> list[np.ndarray]:
         """
         Apply a mask to all images in the list.
         Input image will have pixel values between 0 and 255. If any pixel value exceeds 255 after masking, it will be clipped.
@@ -201,7 +219,7 @@ class ImagePack(object):
         return drp_array
 
 
-    def plot_drp(self, drp_array, cmap='jet', project: str = 'stereo', ax = None) -> plt.Axes:
+    def plot_drp(self, drp_array, cmap='jet', project: str = 'stereo', ax = None):
         """
         Returns a matplotlib axis of a DRP in polar coordinates.
         :param cmap: matplotlib colormap name.
@@ -252,7 +270,7 @@ class ImagePack(object):
             for i in tqdm(range(w * h), desc='Calculating mean DRP'):
                 col = i // h
                 row = i % h
-                drp_array += (self.drp_kernel(loc=(col, row)) / (w * h))
+                drp_array += self.drp(loc=(col, row), mode='pixel') / (w * h)
         elif mode == 'kernel':
             drp_array = np.mean(self.drp_stack, axis=(0,1))
         return drp_array
@@ -263,7 +281,7 @@ class ImagePack(object):
         Generate a 4D NumPy array representing the DRP data for all pixels.
         """
         shape = (self.h, self.w, self.ph_num, self.th_num)
-        drp_stack = np.memmap('drp.dat', dtype='uint8', mode='w+', shape=shape)
+        drp_stack = np.memmap(self.drp_path, dtype='uint8', mode='w+', shape=shape)
 
         for i in tqdm(range(self.h * self.w), desc='Generating DRP stack'):
             col = i // self.h

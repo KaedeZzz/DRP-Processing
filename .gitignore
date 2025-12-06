@@ -1,5 +1,5 @@
-/sample
-/processed
+data/processed
+data/raw
+data/cache/drp.dat
 __pycache__
 .venv
-drp.dat

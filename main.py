@@ -11,7 +11,7 @@ from src.line_detection import hough_transform, find_hough_peaks
 if __name__ == "__main__":
 
     """Initialise Images and DRP data"""
-    images = ImagePack(angle_slice=(2, 2))
+    images = ImagePack(angle_slice=(2, 2), data_root="data", config_path="exp_param.yaml")
 
     """Mean Image"""
     # mean_img = np.mean(images.images, axis=0).astype(np.uint8)

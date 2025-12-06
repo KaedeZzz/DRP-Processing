@@ -1,8 +1,8 @@
 from tqdm import tqdm
-import pathlib
 import numpy as np
 import cv2
-import sys, os
+
+from src.paths import DataPaths
 
 
 def rgb2grey(img, mode='luminosity'):
@@ -15,16 +15,20 @@ def rgb2grey(img, mode='luminosity'):
         elif mode == 'luminosity':
             grey_img = 0.21 * img[:, :, 0] + 0.72 * img[:, :, 1] + 0.07 * img[:, :, 2]
             grey_img = np.reshape(grey_img, (img.shape[0], img.shape[1]))
+        else:
+            raise ValueError("Mode not recognised. Use 'average' or 'luminosity'.")
         return grey_img.astype(np.uint8)
     else:
         raise ValueError("Input image must be either a 2D greyscale or a 3D RGB image.")
     
 
 if __name__ == "__main__":
+    paths = DataPaths.from_root("data")
+
     # Search for files with corresponding affix
     roi = None # region of interest of the images to be processed
-    read_path = pathlib.Path.cwd() / 'sample' # image path to read
-    write_path = pathlib.Path.cwd() / 'processed' # image path to write
+    read_path = paths.raw # image path to read
+    write_path = paths.processed # image path to write
     print(f"Reading images from folder: {read_path}")
     print(f"Saving processed images to folder: {write_path}")
     img_format = 'jpg'
@@ -43,7 +47,8 @@ if __name__ == "__main__":
     for i in tqdm(range(num_images), desc='converting images into greyscale'):
         images[i] = rgb2grey(images[i], mode='luminosity')
         if roi is not None:
-            imin, jmin, imax, jmax = roi
+            # ROI will be implemented into CLI in the future
+            imin, jmin, imax, jmax = roi # type: ignore
             images[i] = images[i][jmin:jmax, imin:imax]
 
     write_path.mkdir(parents=True, exist_ok=True)
