@@ -20,8 +20,8 @@ if __name__ == "__main__":
     # plt.show()
 
     """Area mean DRP"""
-    # ax = images.plot_drp(images.get_mean_drp(), cmap='jet')
-    # plt.show()
+    ax = images.plot_drp(images.get_mean_drp(), cmap='jet')
+    plt.show()
 
     """Direction Map"""
     mag_map, deg_map = drp_direction_map(images)
@@ -73,9 +73,10 @@ if __name__ == "__main__":
     #         masked_images[i].show()
 
     peaks, props = scipy.signal.find_peaks(img_stacked)
-    line_thickness = 3
-    line_color = (0, 0, 0)  # Black color in BGR
-    for peak in peaks:
-        cv2.line(img, (peak, 0), (peak, img.shape[0]), line_color, line_thickness)
+    peaks_by_height = peaks[np.argsort(img_stacked[peaks])[::-1]]
+    keep = 13
+    line_color = (255, 0, 0)  # Black color in BGR
     plt.imshow(img, cmap='gray')
+    for peak in peaks_by_height[:keep]:
+        plt.plot([peak, peak], [0, img.shape[0]], color='red', linewidth=1)
     plt.show()
