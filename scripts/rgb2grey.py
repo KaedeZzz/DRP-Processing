@@ -1,6 +1,12 @@
 from tqdm import tqdm
 import numpy as np
 import cv2
+from pathlib import Path
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.append(str(REPO_ROOT))
 
 from src.paths import DataPaths
 
