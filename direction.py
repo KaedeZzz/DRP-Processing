@@ -37,9 +37,9 @@ def drp_direction_map(imp: ImagePack, display: bool = True):
     mag_map = np.zeros((h, w))
     deg_map = np.zeros((h, w))
     phi_vec = np.mean(imp.drp_stack, axis=3) # shape: [h, w, ph_num]
-    mean_mat = np.repeat(np.mean(phi_vec, axis=2)[:, :, np.newaxis], repeats=imp.ph_num, axis=2)
-    X = ((phi_vec - mean_mat) @ np.cos(np.linspace(0, 2 * np.pi, imp.ph_num, endpoint=False)[:, None]))
-    Y = ((phi_vec - mean_mat) @ np.sin(np.linspace(0, 2 * np.pi, imp.ph_num, endpoint=False)[:, None]))
+    mean_mat = np.repeat(np.mean(phi_vec, axis=2)[:, :, np.newaxis], repeats=imp.param.ph_num, axis=2)
+    X = ((phi_vec - mean_mat) @ np.cos(np.linspace(0, 2 * np.pi, imp.param.ph_num, endpoint=False)[:, None]))
+    Y = ((phi_vec - mean_mat) @ np.sin(np.linspace(0, 2 * np.pi, imp.param.ph_num, endpoint=False)[:, None]))
     X = np.reshape(X, (h, w))
     Y = np.reshape(Y, (h, w))
     mag_map = np.sqrt(X**2 + Y**2)
