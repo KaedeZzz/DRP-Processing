@@ -3,8 +3,8 @@ import scipy
 from matplotlib import pyplot as plt
 import cv2
 
-from direction import drp_direction_map, drp_mask_angle
 from src import ImagePack
+from src.drp_direction import drp_direction_map, drp_mask_angle
 from src.line_detection import hough_transform, find_hough_peaks
 
 
