@@ -4,79 +4,46 @@ from matplotlib import pyplot as plt
 import cv2
 
 from direction import drp_direction_map, drp_mask_angle
-from src import ROI, ImagePack
+from src import ImagePack
 from src.line_detection import hough_transform, find_hough_peaks
 
 
 if __name__ == "__main__":
-
-    """Initialise Images and DRP data"""
+    # Load images + DRP (2x2 angular slice)
     images = ImagePack(angle_slice=(2, 2), data_root="data", config_path="exp_param.yaml")
 
-    """Mean Image"""
-    # mean_img = np.mean(images.images, axis=0).astype(np.uint8)
-    # plt.imshow(mean_img, cmap='gray')
-    # plt.title('Mean Image')
-    # plt.show()
-
-    """Area mean DRP"""
-    ax = images.plot_drp(images.get_mean_drp(), cmap='jet')
+    # Mean DRP plot
+    ax = images.plot_drp(images.get_mean_drp(), cmap="jet")
     plt.show()
 
-    """Direction Map"""
+    # Direction map + mask
     mag_map, deg_map = drp_direction_map(images)
     img_mask = drp_mask_angle(mag_map, deg_map, orientation=90, threshold=45)
-    norm_deg_map = 0.5 * (-np.sin(np.radians(deg_map)) + 1)
-    # plt.imshow(norm_deg_map.T, cmap='gray')
-    # plt.show()
-    img = (norm_deg_map * 255).astype(np.uint8)
-    plt.imshow(img, cmap='gray')
+
+    # Normalize orientation to 0–255 and show
+    img = (0.5 * (-np.sin(np.radians(deg_map)) + 1) * 255).astype(np.uint8)
+    plt.imshow(img, cmap="gray")
     plt.show()
 
-    """Downsampling and Averaging"""
+    # Downsample first, then a single Gaussian blur instead of multiple box blurs
     img = img[::2, ::2]
-    img = cv2.blur(img, (13, 13))
-    img = cv2.blur(img, (17, 17))
-    img = cv2.blur(img, (21, 21))
-    plt.imshow(img, cmap='gray')
+    img = cv2.GaussianBlur(img, (21, 21), sigmaX=8, sigmaY=8)
+    plt.imshow(img, cmap="gray")
     plt.show()
 
-    """Hough Transform for line detection"""
-    # accumulator, rhos, thetas = hough_transform(img, rho_res=1, theta_res=1)
-    # peaks = find_hough_peaks(accumulator, num_peaks=10, threshold=1000)
-    # plt.figure(figsize=(10, 6))
-    # plt.imshow(accumulator, cmap='hot', aspect=0.02)
-    # plt.xlabel('Theta (degrees)')
-    # plt.ylabel('Rho (pixels)')
-    # plt.title('Hough Transform Accumulator')
-    # plt.colorbar()
-    # plt.show()
-
-    """Column Stacking Profile"""
-    img_stacked = np.mean(img, axis=0)
+    # Column intensity profile
+    img_stacked = img.mean(axis=0)
     plt.plot(img_stacked)
-    plt.title('Stacked Image Intensity Profile')
-    plt.xlabel('Pixel Position')
-    plt.ylabel('Average Intensity')
+    plt.title("Stacked Image Intensity Profile")
+    plt.xlabel("Pixel Position")
+    plt.ylabel("Average Intensity")
     plt.show()
-    # img_stacked_d = np.convolve(img_stacked, [-0.5, 0, 0.5], mode='same')
-    # plt.plot(img_stacked_d[2:-2])
-    # plt.title('First Derivative of Stacked Profile')
-    # plt.xlabel('Pixel Position')
-    # plt.ylabel('First Derivative Intensity')
-    # plt.show()
 
-    """Masking images based on DRP orientation"""
-    # masked_images = images.mask_images(0.5 * (np.sin(np.radians(deg_map)) + 1), normalize=True)
-    # for i in range(len(masked_images)):
-    #     if i % 30 == 0:
-    #         masked_images[i].show()
-
-    peaks, props = scipy.signal.find_peaks(img_stacked)
+    # Peak detection (top 13 by height) and overlay
+    peaks, _ = scipy.signal.find_peaks(img_stacked)
     peaks_by_height = peaks[np.argsort(img_stacked[peaks])[::-1]]
     keep = 13
-    line_color = (255, 0, 0)  # Black color in BGR
-    plt.imshow(img, cmap='gray')
+    plt.imshow(img, cmap="gray")
     for peak in peaks_by_height[:keep]:
-        plt.plot([peak, peak], [0, img.shape[0]], color='red', linewidth=1)
+        plt.plot([peak, peak], [0, img.shape[0]], color="red", linewidth=1)
     plt.show()
