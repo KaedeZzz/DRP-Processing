@@ -1,4 +1,4 @@
-from .imageparam import ImageParam
+from .config import DRPConfig, CacheConfig, load_drp_config, load_cache_config, save_cache_config
 from .roi import ROI
 from .paths import DataPaths
 
@@ -7,14 +7,9 @@ from tqdm import tqdm
 import numpy as np
 from matplotlib import pyplot as plt
 from pathlib import Path
-import yaml
 
 
 class ImagePack(object):
-    # def __init__(self, images: list[Image.Image], param: ImageParam):
-    #     self.images = images
-    #     self.param = param
-    #     self.self_check()
 
     def __init__(
         self,
@@ -32,36 +27,25 @@ class ImagePack(object):
         :param read_mode: if True, then DRP data will be directly read from file.
         :param slice: tuple of (phi_slice, theta_slice) to reduce image set resolution in DRP angles. Only required when read_mode is False.
         """
-        paths = DataPaths.from_root(data_root)
+        paths = DataPaths.from_root(data_root)  # Initialise data paths
         self.paths = paths
 
         # Resolve path to load images
         if folder is None:
-            path = paths.processed
+            path = paths.processed  # By default, use final-processed image folder
         else:
             folder_path = Path(folder)
             path = folder_path if folder_path.is_absolute() else paths.root / folder_path
 
         # Resolve experiment config path (defaults to repo root exp_param.yaml)
-        repo_root = Path(__file__).resolve().parent.parent
+        repo_root = Path(__file__).resolve().parent.parent  # The repo root directory is two levels up from this file
         config_path = Path(config_path) if config_path is not None else repo_root / "exp_param.yaml"
         if not config_path.is_absolute():
             config_path = repo_root / config_path
 
-        with open(config_path, 'r') as stream:
-            exp_param = yaml.safe_load(stream)
-
-        # Assign parameters locally
-        th_min = exp_param['th_min']
-        th_max = exp_param['th_max']
-        th_num = exp_param['th_num']
-        ph_min = exp_param['ph_min']
-        ph_max = exp_param['ph_max']
-        ph_num = exp_param['ph_num']
-        ph_slice = exp_param.get('phi_slice', 1)
-        th_slice = exp_param.get('theta_slice', 1)
-        self.param = ImageParam(th_min, th_max, th_num,
-                                ph_min, ph_max, ph_num)
+        self.param = load_drp_config(config_path)  # Build DRPConfig from config file
+        ph_slice = self.param.phi_slice
+        th_slice = self.param.theta_slice
 
         # Search for files with corresponding affix
         images = []
@@ -72,13 +56,6 @@ class ImagePack(object):
             except IOError:
                 print(f"Could not open image at path: {image_path}")
         self.num_images = len(images)
-        
-        # Convert all images into greyscale
-        # for i in tqdm(range(self.num_images), desc='converting images into greyscale'):
-        #     images[i] = cv2.cvtColor(images[i], cv2.COLOR_BGR2GRAY)
-        #     if roi is not None:
-        #         imin, jmin, imax, jmax = roi
-        #         images[i] = images[i][jmin:jmax, imin:imax]
 
         # Assign attributes
         self.images = images
@@ -88,32 +65,24 @@ class ImagePack(object):
         data_config_path = paths.cache / 'data_config.yaml'
 
         if data_config_path.exists() and self.drp_path.exists():
+            # Use existing drp.dat and data_config.yaml if in read mode
             print('Reading DRP data from file...')
-            with open(data_config_path, 'r') as file:
-                saved_config = yaml.safe_load(file)
-                ph_slice = saved_config.get('ph_slice', 1)
-                th_slice = saved_config.get('th_slice', 1)
-                angle_slice = (ph_slice, th_slice)
-                self.slice_images(angle_slice)
-                shape = (self.h, self.w, self.param.ph_num, self.param.th_num)   
-                drp_stack = np.memmap(self.drp_path, dtype='uint8', mode='r+', shape=shape)
-                self.drp_stack = drp_stack
+            saved_config = load_cache_config(data_config_path)
+            ph_slice = saved_config.ph_slice
+            th_slice = saved_config.th_slice
+            angle_slice = (ph_slice, th_slice)
+            self.slice_images(angle_slice)
+            shape = (self.h, self.w, self.param.ph_num, self.param.th_num)
+            drp_stack = np.memmap(self.drp_path, dtype='uint8', mode='r+', shape=shape)
+            self.drp_stack = drp_stack
             
         else:
             # Write drp_config.yaml and generate drp.dat if not in read mode
-            config = {
-                "th_min": self.param.th_min,
-                "th_max": self.param.th_max,
-                "th_num": self.param.th_num,
-                "ph_min": self.param.ph_min,
-                "ph_max": self.param.ph_max,
-                "ph_num": self.param.ph_num,
-                "ph_slice": angle_slice[0],
-                "th_slice": angle_slice[1],
-            }
             paths.cache.mkdir(parents=True, exist_ok=True)
-            with open(data_config_path, 'w') as file:
-                yaml.dump(config, file)
+            save_cache_config(
+                data_config_path,
+                CacheConfig(ph_slice=angle_slice[0], th_slice=angle_slice[1]),
+            )
             self.slice_images(angle_slice)
             shape = (self.w, self.h, self.param.ph_num, self.param.th_num)
             self.get_drp_stack()
@@ -125,6 +94,13 @@ class ImagePack(object):
         return iter((self.images, self.param))
     
     def slice_indices(self, angle_slice: tuple[int, int]) -> np.ndarray:
+        """
+        Get indices of images to be retained after slicing.
+        :param slice_phi_step: retain an image from each *phi_step* phi angles.
+        :param slice_theta_step: retain an image from each *phi_step* phi angles.
+        :return: indices of images to be retained.
+        """
+
         (ph_slice, th_slice) = angle_slice
         if ph_slice <= 0 or th_slice <= 0:
             raise ValueError('phi_step and theta_step must be positive.')
@@ -154,14 +130,16 @@ class ImagePack(object):
         indices = self.slice_indices(angle_slice)
         self.images = [self.images[i] for i in indices]
 
-        self.param.ph_max = self.param.ph_max - int((ph_slice - 1) * self.param.ph_step)
-        self.param.ph_num  = int(self.param.ph_num / ph_slice)
-        self.param.ph_step *= ph_slice
-        self.param.th_max = self.param.th_max - int((th_slice - 1) * self.param.th_step)
-        self.param.th_num  = int(self.param.th_num / th_slice)
-        self.param.th_step *= th_slice
+        # Update DRPConfig accordingly
+        self.param.ph_max = int(self.param.ph_max - (ph_slice - 1) * self.param.ph_step)
+        self.param.ph_num = int(self.param.ph_num / ph_slice)
+        self.param.th_max = int(self.param.th_max - (th_slice - 1) * self.param.th_step)
+        self.param.th_num = int(self.param.th_num / th_slice)
+
+        # TODO: save new config back to DRPConfig file
 
         self.num_images = len(self.images)
+        # Validate new image count
         if self.num_images != self.param.ph_num * self.param.th_num:
             raise ValueError('Number of images {} does not match number of angles.'.format(self.num_images))
         
@@ -194,7 +172,8 @@ class ImagePack(object):
 
     def drp(self, loc, mode='kernel') -> np.ndarray:
         """
-        Calculate DRP for a single pixel.
+        Calculate DRP for a single pixel. In pixel mode, the DRP is calculated by collecting pixel values from all images at the specified location.
+        In kernel mode, the DRP is retrieved directly from the precomputed DRP stack.
         :param image_pack: ImagePack instance of input images and DRP parameters.
         :param loc: location of the pixel.
         :return: a 2D Numpy array representing the DRP data. [th_num x ph_num]
