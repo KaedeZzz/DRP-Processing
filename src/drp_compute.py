@@ -86,11 +86,11 @@ def build_drp_stack(images: list[np.ndarray], config: DRPConfig, memmap: np.memm
     ph, th = config.ph_num, config.th_num
     if len(images) != ph * th:
         raise ValueError(f"Number of images {len(images)} does not match number of angles {ph * th}.")
-    arr = np.asarray(images, dtype=np.uint8)
+    arr = np.stack(images, axis=0, dtype=np.uint8)
     h, w = arr.shape[1:]
-    # Reshape to [phi, theta, h, w] then transpose to [h, w, phi, theta] to match stack layout
-    reshaped = arr.reshape((ph, th, h, w))
-    memmap[:] = np.transpose(reshaped, (2, 3, 0, 1))
+    # Build a contiguous phi/theta-first view then move axes once when copying to the memmap.
+    phi_theta_view = arr.reshape((ph, th, h, w))
+    np.copyto(memmap, np.moveaxis(phi_theta_view, (0, 1), (2, 3)))
     memmap.flush()
     return memmap
 

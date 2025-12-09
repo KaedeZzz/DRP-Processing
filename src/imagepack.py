@@ -1,4 +1,5 @@
 from pathlib import Path
+import warnings
 
 import numpy as np
 
@@ -30,14 +31,40 @@ class ImagePack:
         data_root: str | Path = "data",
         config_path: str | Path | None = None,
         use_cached_stack: bool = True,
+        load_workers: int | None = None,
+        subtract_background: bool = True,
+        subtraction_scale_percentile: float = 99.5,
     ):
         self.paths = DataPaths.from_root(data_root)
         self.folder = resolve_image_folder(folder, self.paths)
         self.config_path = resolve_config_path(config_path)
         self.base_config: DRPConfig = load_drp_config(self.config_path)
+        self.data_serial = self.base_config.data_serial
 
         # Load raw grayscale images from disk
-        self.images = load_images(self.folder, img_format)
+        self.images = load_images(self.folder, img_format, num_workers=load_workers)
+
+        # Optional brightness-invariant preprocessing: subtract blurred backgrounds
+        if subtract_background:
+            bg_folder = self.paths.root / "background"
+            if not bg_folder.exists():
+                warnings.warn(f"Background folder not found at {bg_folder}; skipping subtraction.")
+            else:
+                bg_images = load_images(bg_folder, img_format, num_workers=load_workers)
+                if len(bg_images) != len(self.images):
+                    raise ValueError(f"Background count {len(bg_images)} does not match image count {len(self.images)}.")
+                subtracted: list[np.ndarray] = []
+                for img, bg in zip(self.images, bg_images):
+                    if img.shape != bg.shape:
+                        raise ValueError(f"Background shape {bg.shape} does not match image shape {img.shape}.")
+                    # Subtract then rescale so images share roughly consistent brightness.
+                    diff = img.astype(np.float32) - bg.astype(np.float32)
+                    diff = np.clip(diff, 0, None)
+                    ref = np.percentile(diff, subtraction_scale_percentile)
+                    scale = 255.0 / max(ref, 1.0)
+                    diff = np.clip(diff * scale, 0, 255).astype(np.uint8)
+                    subtracted.append(diff)
+                self.images = subtracted
         self.num_images = len(self.images)
         self.h, self.w = self.images[0].shape
 
@@ -49,7 +76,7 @@ class ImagePack:
         sliced_th = self.base_config.th_num // angle_slice[1]
         stack_shape = (self.h, self.w, sliced_ph, sliced_th)
         self.drp_stack, cache_cfg, stack_needs_build = prepare_cache(
-            self.paths, angle_slice, stack_shape
+            self.paths, angle_slice, stack_shape, self.data_serial
         )
 
         # Use caller's slice preference; rebuild cache if it differs from what's stored.
@@ -66,7 +93,11 @@ class ImagePack:
             )
             save_cache_config(
                 self.paths.cache / "data_config.yaml",
-                CacheConfig(ph_slice=self.angle_slice[0], th_slice=self.angle_slice[1]),
+                CacheConfig(
+                    ph_slice=self.angle_slice[0],
+                    th_slice=self.angle_slice[1],
+                    data_serial=self.data_serial,
+                ),
             )
             stack_needs_build = True
 
@@ -86,7 +117,11 @@ class ImagePack:
             )
             save_cache_config(
                 self.paths.cache / "data_config.yaml",
-                CacheConfig(ph_slice=self.angle_slice[0], th_slice=self.angle_slice[1]),
+                CacheConfig(
+                    ph_slice=self.angle_slice[0],
+                    th_slice=self.angle_slice[1],
+                    data_serial=self.data_serial,
+                ),
             )
             stack_needs_build = True
 

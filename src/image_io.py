@@ -1,5 +1,6 @@
+import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Iterable
 
 import cv2
 import numpy as np
@@ -34,18 +35,27 @@ def resolve_image_folder(folder: str | Path | None, paths: DataPaths) -> Path:
     return folder_path if folder_path.is_absolute() else paths.root / folder_path
 
 
-def load_images(folder: Path, img_format: str) -> list[np.ndarray]:
+def load_images(folder: Path, img_format: str, num_workers: int | None = None) -> list[np.ndarray]:
     """
     Load grayscale images from a folder matching the given extension.
     """
-    images: list[np.ndarray] = []
-    for image_path in tqdm(sorted(folder.glob(f"*.{img_format}")), desc="loading images"):
-        image = cv2.imread(str(image_path), flags=cv2.IMREAD_GRAYSCALE)
-        if image is None:
-            raise IOError(f"Could not open image at path: {image_path}")
-        images.append(image)
-    if not images:
+    image_paths = sorted(folder.glob(f"*.{img_format}"))
+    if not image_paths:
         raise ValueError(f"No images with extension .{img_format} found in {folder}")
+
+    def _read(path: Path) -> np.ndarray:
+        img = cv2.imread(str(path), flags=cv2.IMREAD_GRAYSCALE)
+        if img is None:
+            raise IOError(f"Could not open image at path: {path}")
+        return img
+
+    # Threaded decode helps when disk and CPU can overlap; falls back to serial otherwise.
+    workers = num_workers if num_workers is not None else (os.cpu_count() or 1)
+    if workers <= 1:
+        return [_read(p) for p in tqdm(image_paths, desc="loading images")]
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        images = list(tqdm(pool.map(_read, image_paths), total=len(image_paths), desc="loading images"))
     return images
 
 
@@ -61,6 +71,7 @@ def prepare_cache(
     paths: DataPaths,
     angle_slice: tuple[int, int],
     stack_shape: tuple[int, int, int, int],
+    data_serial: str | int | None,
 ) -> tuple[np.memmap, CacheConfig, bool]:
     """
     Prepare the DRP cache. Returns (memmap, cache_cfg, is_new_stack).
@@ -68,13 +79,25 @@ def prepare_cache(
     """
     data_config_path = paths.cache / "data_config.yaml"
     drp_path = paths.cache / "drp.dat"
-
-    cache_cfg = CacheConfig(ph_slice=angle_slice[0], th_slice=angle_slice[1])
+    cache_cfg = CacheConfig(
+            ph_slice=angle_slice[0], 
+            th_slice=angle_slice[1], 
+            data_serial=data_serial
+    )
     if data_config_path.exists() and drp_path.exists():
-        cache_cfg = load_cache_config(data_config_path)
-        memmap = open_drp_memmap(drp_path, stack_shape, mode="r+")
-        return memmap, cache_cfg, False
+        # DRP data exists; check if data serial matches
+        existing_cfg = load_cache_config(data_config_path)
+        if existing_cfg.data_serial == data_serial:
+            # Use existing data
+            cache_cfg = existing_cfg
+            memmap = open_drp_memmap(drp_path, stack_shape, mode="r+")
+            return memmap, cache_cfg, False
+        # Data serial changed: overwrite in-place without deleting (avoids Windows file-lock issues)
+        save_cache_config(data_config_path, cache_cfg)
+        memmap = open_drp_memmap(drp_path, stack_shape, mode="w+")
+        return memmap, cache_cfg, True
 
+    # Create new cache
     save_cache_config(data_config_path, cache_cfg)
     memmap = open_drp_memmap(drp_path, stack_shape, mode="w+")
     return memmap, cache_cfg, True
