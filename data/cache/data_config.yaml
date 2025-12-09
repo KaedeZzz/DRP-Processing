@@ -1,8 +1,3 @@
-ph_max: 354
-ph_min: 0
-ph_num: 60
-ph_slice: 2
-th_max: 66
-th_min: 15
-th_num: 18
-th_slice: 2
+data_serial: 7
+ph_slice: 1
+th_slice: 1

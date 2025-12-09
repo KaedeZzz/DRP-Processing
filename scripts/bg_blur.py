@@ -12,6 +12,20 @@ if str(REPO_ROOT) not in sys.path:
 from src.paths import DataPaths
 
 
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
+
+
+def clear_image_folder(path: Path) -> None:
+    """
+    Remove existing image files so background regeneration does not mix old data.
+    """
+    if not path.exists():
+        return
+    for item in path.iterdir():
+        if item.is_file() and item.suffix.lower() in IMAGE_EXTS:
+            item.unlink(missing_ok=True)
+
+
 if __name__ == "__main__":
     paths = DataPaths.from_root("data")
     images = []
@@ -48,5 +62,6 @@ if __name__ == "__main__":
 
     background_dir = paths.root / 'background'
     background_dir.mkdir(parents=True, exist_ok=True)
+    clear_image_folder(background_dir)
     for i in tqdm(range(len(images)), desc='saving blurred images'):
         cv2.imwrite(str(background_dir / img_paths[i].name), images[i])

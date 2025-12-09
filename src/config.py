@@ -17,8 +17,10 @@ class DRPConfig:
     ph_num: int
     phi_slice: int = 1
     theta_slice: int = 1
+    data_serial: str | int | None = None
 
     def validate(self) -> None:
+        # Basic sanity checks on DRP parameters
         if self.ph_min >= self.ph_max:
             raise ValueError("ph_min must be less than ph_max.")
         if self.th_min >= self.th_max:
@@ -45,14 +47,16 @@ class DRPConfig:
 
 @dataclass
 class CacheConfig:
+    # Cache settings for DRP processing
     ph_slice: int = 1
     th_slice: int = 1
+    data_serial: str | int | None = None
 
 
 def load_drp_config(path: Path) -> DRPConfig:
     path = Path(path)
     with path.open("r") as fh:
-        data = yaml.safe_load(fh) or {}
+        data = yaml.safe_load(fh) or {} # return empty dict if file is empty
 
     required_keys = ["th_min", "th_max", "th_num", "ph_min", "ph_max", "ph_num"]
     missing = [k for k in required_keys if k not in data]
@@ -68,6 +72,7 @@ def load_drp_config(path: Path) -> DRPConfig:
         ph_num=data["ph_num"],
         phi_slice=data.get("phi_slice", 1),
         theta_slice=data.get("theta_slice", 1),
+        data_serial=data.get("data_serial"),
     )
     cfg.validate()
     return cfg
@@ -82,6 +87,7 @@ def load_cache_config(path: Path) -> CacheConfig:
     return CacheConfig(
         ph_slice=data.get("ph_slice", 1),
         th_slice=data.get("th_slice", 1),
+        data_serial=data.get("data_serial"),
     )
 
 
@@ -90,3 +96,13 @@ def save_cache_config(path: Path, cfg: CacheConfig) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w") as fh:
         yaml.dump(asdict(cfg), fh)
+
+
+def save_drp_config(path: Path, cfg: DRPConfig) -> None:
+    """
+    Persist DRP acquisition parameters, including the dataset serial, for traceability.
+    """
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w") as fh:
+        yaml.dump(asdict(cfg), fh, sort_keys=False)

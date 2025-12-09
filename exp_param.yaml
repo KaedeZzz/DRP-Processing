@@ -1,6 +1,7 @@
-th_min: 15
-th_max: 66
-th_num: 18
+data_serial: 7
+th_min: 10
+th_max: 65
+th_num: 12
 ph_min: 0
-ph_max: 354
-ph_num: 60
+ph_max: 351
+ph_num: 40

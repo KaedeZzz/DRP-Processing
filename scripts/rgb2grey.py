@@ -11,6 +11,20 @@ if str(REPO_ROOT) not in sys.path:
 from src.paths import DataPaths
 
 
+IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".bmp"}
+
+
+def clear_image_folder(path: Path) -> None:
+    """
+    Remove existing image files so a new run starts from a clean slate.
+    """
+    if not path.exists():
+        return
+    for item in path.iterdir():
+        if item.is_file() and item.suffix.lower() in IMAGE_EXTS:
+            item.unlink(missing_ok=True)
+
+
 def rgb2grey(img, mode='luminosity'):
     """Convert RGB image to greyscale using luminosity method."""
     if len(img.shape) == 2:
@@ -58,5 +72,6 @@ if __name__ == "__main__":
             images[i] = images[i][jmin:jmax, imin:imax]
 
     write_path.mkdir(parents=True, exist_ok=True)
+    clear_image_folder(write_path)
     for i in tqdm(range(num_images), desc='saving greyscale images'):
         cv2.imwrite(str(write_path / sample_paths[i].name), images[i])
