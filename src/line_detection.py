@@ -1,12 +1,14 @@
+import cv2
 import numpy as np
 from tqdm import tqdm
 
+
 def hough_transform(edge_image, rho_res=1, theta_res=1):
     """
-    Compute the Hough Transform accumulator for lines.
+    Compute the Hough Transform accumulator for lines using vectorised binning.
     
     Parameters:
-        edge_image : 2D numpy array (binary edge map)
+        edge_image : 2D numpy array (binary or grayscale edge map)
         rho_res    : resolution of rho in pixels
         theta_res  : resolution of theta in degrees
         
@@ -15,33 +17,42 @@ def hough_transform(edge_image, rho_res=1, theta_res=1):
         rhos        : array of rho values
         thetas      : array of theta values (radians)
     """
-    # Image dimensions
     h, w = edge_image.shape
-
-    # Theta values (in radians)
     thetas = np.deg2rad(np.arange(-90, 90, theta_res))
+    cos_t, sin_t = np.cos(thetas), np.sin(thetas)
 
-    # Rho range
-    diag_len = int(np.ceil(np.sqrt(h*h + w*w)))
-    rhos = np.arange(-diag_len, diag_len, rho_res)
+    # Include the endpoint to avoid off-by-one at the far edge
+    diag_len = int(np.ceil(np.hypot(h, w)))  # Diagonal length of the image
+    rhos = np.arange(-diag_len, diag_len + rho_res, rho_res)
+    num_rhos, num_thetas = len(rhos), len(thetas)
 
-    # Accumulator array; modified from simple Hough such that it does
-    #  not only record appearances but also values.
-    accumulator = np.zeros((len(rhos), len(thetas)))
+    ys, xs = np.nonzero(edge_image)
+    if ys.size == 0:
+        return np.zeros((num_rhos, num_thetas)), rhos, thetas
 
-    ys, xs = np.nonzero(edge_image)  # Get coordinates of edge points
-    print(max(xs), max(ys))
-    pixel_list = list(zip(ys, xs))
+    edge_vals = edge_image[ys, xs].astype(np.float64) / 255.0
 
+    # Compute rho for all points and thetas at once: [N, T]
+    rho_vals = xs[:, None] * cos_t[None, :] + ys[:, None] * sin_t[None, :]  # Shape: [N, T]
+    rho_idx = np.round((rho_vals + diag_len) / rho_res).astype(np.int64)
 
-    # Fill accumulator
-    for y, x in tqdm(pixel_list, desc='Performing Hough Transform'): # Iterate over edge points
-        for t_idx, theta in enumerate(thetas): # Iterate over angles
-            # For each edge pixel, the code finds all possible lines (rho, theta) that could pass through it.
-            rho = x * np.cos(theta) + y * np.sin(theta) # Calculates distance from origin to the proposed line.
-            rho_idx = int((rho + diag_len) / rho_res) # Find index of this distance
-            accumulator[rho_idx, t_idx] += edge_image[y, x] / 255 # Increment normalised value for accumulator at (rho, theta)
+    # Mask out-of-range bins (can happen due to rounding)
+    valid = (rho_idx >= 0) & (rho_idx < num_rhos)
+    if not valid.any():
+        return np.zeros((num_rhos, num_thetas)), rhos, thetas
 
+    theta_idx = np.broadcast_to(np.arange(num_thetas, dtype=np.int64), rho_idx.shape) # Shape: [N, T]
+    flat_idx = rho_idx[valid] * num_thetas + theta_idx[valid]  # Shape: [M] where M is number of valid votes
+    weights = np.broadcast_to(edge_vals[:, None], rho_vals.shape)[valid]  # Shape: [M]
+
+    # Bin counts into flat accumulator then reshape
+    acc_flat = np.bincount(flat_idx, weights=weights, minlength=num_rhos * num_thetas)
+    cnt_flat = np.bincount(flat_idx, minlength=num_rhos * num_thetas)
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        acc_mean = np.divide(acc_flat, cnt_flat, out=np.zeros_like(acc_flat), where=cnt_flat > 0)
+
+    accumulator = acc_mean.reshape(num_rhos, num_thetas)
     return accumulator, rhos, thetas
 
 
@@ -62,3 +73,25 @@ def find_hough_peaks(accumulator, num_peaks=5, threshold=1000):
         acc[max(0, rho_idx-10):rho_idx+10, max(0, theta_idx-10):theta_idx+10] = 0
 
     return peaks
+
+
+def dominant_orientation_from_accumulator(accumulator: np.ndarray, thetas: np.ndarray, top_k: int = 1):
+    """
+    Return the strongest theta angles from a Hough accumulator.
+    """
+    if accumulator.size == 0:
+        return []
+    theta_scores = accumulator.sum(axis=0)
+    idx = np.argsort(theta_scores)[::-1][:top_k]
+    return [(float(thetas[i]), float(theta_scores[i])) for i in idx]
+
+
+def rotate_image_to_orientation(image: np.ndarray, theta_rad: float, target_angle_deg: float = 0.0) -> np.ndarray:
+    """
+    Rotate image so the dominant Hough line at theta_rad aligns to target_angle_deg.
+    """
+    angle_deg = target_angle_deg - np.degrees(theta_rad)
+    h, w = image.shape[:2]
+    center = (w / 2.0, h / 2.0)
+    rot_mat = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
+    return cv2.warpAffine(image, rot_mat, (w, h), flags=cv2.INTER_LINEAR)
