@@ -50,7 +50,12 @@ def hough_transform(edge_image, rho_res=1, theta_res=1):
     cnt_flat = np.bincount(flat_idx, minlength=num_rhos * num_thetas)
 
     with np.errstate(divide="ignore", invalid="ignore"):
-        acc_mean = np.divide(acc_flat, cnt_flat, out=np.zeros_like(acc_flat), where=cnt_flat > 0)
+        acc_mean = np.divide(
+            acc_flat, 
+            cnt_flat, 
+            out=np.zeros_like(acc_flat, dtype=np.float32), 
+            where=cnt_flat > 0
+        )
 
     accumulator = acc_mean.reshape(num_rhos, num_thetas)
     return accumulator, rhos, thetas
@@ -95,3 +100,30 @@ def rotate_image_to_orientation(image: np.ndarray, theta_rad: float, target_angl
     center = (w / 2.0, h / 2.0)
     rot_mat = cv2.getRotationMatrix2D(center, angle_deg, 1.0)
     return cv2.warpAffine(image, rot_mat, (w, h), flags=cv2.INTER_LINEAR)
+
+
+def overlay_hough_lines(
+    image: np.ndarray,
+    peaks: list[tuple[int, int, float]],
+    rhos: np.ndarray,
+    thetas: np.ndarray,
+    color: tuple[int, int, int] = (0, 255, 0),
+    thickness: int = 2,
+) -> np.ndarray:
+    """
+    Draw the highest-voted lines identified in the Hough accumulator.
+    """
+    overlay = cv2.cvtColor(image.copy(), cv2.COLOR_GRAY2BGR) if image.ndim == 2 else image.copy()
+    h, w = image.shape[:2]
+    diag = int(np.hypot(h, w))
+
+    for rho_idx, theta_idx, _ in peaks:
+        rho = rhos[rho_idx]
+        theta = thetas[theta_idx]
+        a, b = np.cos(theta), np.sin(theta)
+        x0, y0 = a * rho, b * rho
+        pt1 = (int(x0 + diag * (-b)), int(y0 + diag * a))
+        pt2 = (int(x0 - diag * (-b)), int(y0 - diag * a))
+        cv2.line(overlay, pt1, pt2, color, thickness, cv2.LINE_AA)
+
+    return overlay
