@@ -4,3 +4,4 @@ data/background
 data/cache/drp.dat
 __pycache__
 .venv
+.DS_Store
