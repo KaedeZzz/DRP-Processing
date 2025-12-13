@@ -1,4 +1,4 @@
-# DRP Processing
+# PaperDRM
 
 Python toolkit for working with directional reflectance profile (DRP) image stacks. It handles data prep (RGB → grayscale, blurred background generation), fast DRP stack construction with on-disk caching, per-pixel orientation/moment analysis, and simple visualisation utilities.
 
