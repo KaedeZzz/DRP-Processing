@@ -1,7 +1,4 @@
-data/processed
-data/raw
-data/background
-data/cache/drp.dat
+data
 __pycache__
 .venv
 .DS_Store
