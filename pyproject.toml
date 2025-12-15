@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "paperdrm"
+version = "0.1.0"
+description = "Directional reflectance profile (DRP) toolkit with caching, analysis, and visualisation helpers."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "PaperDRM contributors" }]
+dependencies = [
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "opencv-python",
+    "tqdm",
+    "pillow",
+    "PyYAML",
+]
+
+[tool.setuptools]
+packages = ["paperdrm", "src"]

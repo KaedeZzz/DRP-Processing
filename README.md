@@ -1,21 +1,21 @@
 # PaperDRM
 
-Python toolkit for working with directional reflectance profile (DRP) image stacks. It handles data prep (RGB → grayscale, blurred background generation), fast DRP stack construction with on-disk caching, per-pixel orientation/moment analysis, and simple visualisation utilities.
+Python toolkit for working with directional reflectance profile (DRP) image stacks. It handles data prep (RGB to grayscale and blurred background generation), fast DRP stack construction with on-disk caching, per-pixel orientation/moment analysis, and simple visualisation utilities.
 
 ## Repository layout
-- `main.py` – minimal example that loads an image stack, plots the mean DRP, computes direction maps, and does a quick peak finding pass.
-- `src/` – core library code:
-  - `imagepack.py` – `ImagePack` loader with caching, background subtraction, angle slicing, DRP extraction, and plotting helpers.
-  - `drp_compute.py`, `drp_direction.py`, `drp_plot.py` – DRP stack creation, spherical moment/direction maps, and plotting utilities.
-  - `line_detection.py` – Hough-based line/angle detection helpers.
-  - `config.py`, `image_io.py`, `paths.py` – configuration, I/O, and data path helpers.
-  - `roi.py`, `imageparam.py` – lightweight ROI and parameter helpers kept for compatibility.
-- `scripts/` – standalone preprocessing scripts:
+- `main.py` - minimal example that loads an image stack, plots the mean DRP, computes direction maps, and does a quick peak-finding pass.
+- `paperdrm/` - core library code:
+  - `imagepack.py` - `ImagePack` loader with caching, background subtraction, angle slicing, DRP extraction, and plotting helpers.
+  - `drp_compute.py`, `drp_direction.py`, `drp_plot.py` - DRP stack creation, spherical moment/direction maps, and plotting utilities.
+  - `line_detection.py` - Hough-based line/angle detection helpers.
+  - `config.py`, `image_io.py`, `paths.py` - configuration, I/O, and data path helpers.
+  - `roi.py`, `imageparam.py` - lightweight ROI and parameter helpers kept for compatibility.
+- `scripts/` - standalone preprocessing scripts:
   - `rgb2grey.py` converts `data/raw` RGB images to grayscale into `data/processed`.
   - `bg_blur.py` builds a heavily blurred background set in `data/background` for subtraction.
-- `data/` – expected data root; contains `raw/`, `processed/`, `background/`, and `cache/` (memmap + metadata written automatically).
-- `exp_param.yaml` – DRP acquisition parameters for the dataset (phi/theta ranges and counts).
-- `main.ipynb`, `map_visualise.ipynb` – interactive exploration notebooks.
+- `data/` - expected data root; contains `raw/`, `processed/`, `background/`, and `cache/` (memmap + metadata written automatically).
+- `exp_param.yaml` - DRP acquisition parameters for the dataset (phi/theta ranges and counts).
+- `main.ipynb`, `map_visualise.ipynb` - interactive exploration notebooks.
 
 ## Quick start
 1) Install dependencies (Python 3.11+ recommended):
@@ -50,8 +50,8 @@ This loads grayscale images from `data/processed`, subtracts blurred backgrounds
 
 ## Core usage (library)
 ```python
-from src import ImagePack
-from src.drp_direction import drp_direction_map, drp_mask_angle
+from paperdrm import ImagePack
+from paperdrm.drp_direction import drp_direction_map, drp_mask_angle
 
 # Load images with optional angle down-sampling and background subtraction
 imp = ImagePack(
@@ -66,7 +66,7 @@ imp = ImagePack(
 mean_drp = imp.get_mean_drp()      # shape [phi, theta]
 pixel_drp = imp.drp((100, 200))    # per-pixel DRP from the cached stack
 
-# Per-pixel DRP direction and a magnitude-weighted mask near 90° ± 45°
+# Per-pixel DRP direction and a magnitude-weighted mask near 90 +/- 45 deg
 mag_map, deg_map = drp_direction_map(imp, display=False)
 mask = drp_mask_angle(mag_map, deg_map, orientation=90, threshold=45)
 
@@ -75,8 +75,8 @@ imp.mask_images(mask, normalize=True)
 ```
 
 ### Additional helpers
-- `src.line_detection.hough_transform` / `find_hough_peaks` / `rotate_image_to_orientation` for line detection and alignment.
-- `src.drp_direction.spherical_descriptor` and `spherical_descriptor_maps` for per-pixel 3D orientation descriptors, anisotropy scores, and dominant plane angles.
+- `paperdrm.line_detection.hough_transform` / `find_hough_peaks` / `rotate_image_to_orientation` for line detection and alignment.
+- `paperdrm.drp_direction.spherical_descriptor` and `spherical_descriptor_maps` for per-pixel 3D orientation descriptors, anisotropy scores, and dominant plane angles.
 - `ImagePack.plot_drp` (wraps `drp_plot.plot_drp`) to visualise any DRP array in stereo or direct projection.
 
 ## Data & caching notes
