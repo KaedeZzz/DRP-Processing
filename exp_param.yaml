@@ -5,3 +5,4 @@ th_num: 12
 ph_min: 0
 ph_max: 351
 ph_num: 40
+square_crop: True

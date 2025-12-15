@@ -35,6 +35,7 @@ class ImagePack:
         load_workers: int | None = None,
         subtract_background: bool = True,
         subtraction_scale_percentile: float = 99.5,
+        square_crop: bool = False,
         settings: Settings | None = None,
     ):
         # Prefer a single Settings object; reject mixed kwargs when provided.
@@ -50,6 +51,7 @@ class ImagePack:
                     load_workers is not None,
                     subtract_background is not True,
                     subtraction_scale_percentile != 99.5,
+                    square_crop is not False,
                 ]
             )
             if overrides:
@@ -69,6 +71,7 @@ class ImagePack:
                 load_workers=load_workers,
                 config_path=cfg_path,
                 drp=drp_cfg,
+                square_crop=square_crop,
             )
 
         self.paths = DataPaths.from_root(self.settings.data_root)
@@ -101,6 +104,8 @@ class ImagePack:
                     diff = np.clip(diff * scale, 0, 255).astype(np.uint8)
                     subtracted.append(diff)
                 self.images = subtracted
+        if self.settings.square_crop:
+            self.images = self._crop_to_square(self.images)
         self.num_images = len(self.images)
         self.h, self.w = self.images[0].shape
 
@@ -175,6 +180,18 @@ class ImagePack:
     def mask_images(self, mask: np.ndarray, normalize: bool = False):
         self.images = compute_mask_images(self.images, mask, normalize)
         return self.images
+
+    def _crop_to_square(self, images: list[np.ndarray]) -> list[np.ndarray]:
+        h, w = images[0].shape
+        if h == w:
+            return images
+        size = min(h, w)
+        start_h = (h - size) // 2
+        start_w = (w - size) // 2
+        cropped: list[np.ndarray] = []
+        for img in images:
+            cropped.append(img[start_h : start_h + size, start_w : start_w + size])
+        return cropped
 
     def drp(self, loc, mode: str = "kernel"):
         if mode == "pixel":
