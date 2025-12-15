@@ -10,6 +10,10 @@ import yaml
 # Unified DRP acquisition/cache config (moved from config.py for central access).
 @dataclass
 class DRPConfig:
+    """
+    Configuration for DRP acquisition parameters.
+    """
+
     th_min: int
     th_max: int
     th_num: int
@@ -39,21 +43,36 @@ class DRPConfig:
         return (self.th_max - self.th_min) / (self.th_num - 1)
 
     def recompute_steps(self) -> None:
+        # Dummy method for compatibility; steps are computed on-the-fly.
         return
 
 
 @dataclass
 class CacheConfig:
+    """
+    Configuration for cached DRP image stacks.
+    """
+
     ph_slice: int = 1
     th_slice: int = 1
     data_serial: str | int | None = None
 
 
 def load_drp_config(path: Path) -> DRPConfig:
+    """
+    Load DRP acquisition configuration from a YAML file.
+    
+    :param path: Path to the YAML configuration file.
+    :type path: Path
+    :return: DRPConfig instance with loaded settings.
+    :rtype: DRPConfig
+    """
+
     path = Path(path)
     with path.open("r") as fh:
         data = yaml.safe_load(fh) or {}
 
+    # Check for must-exist keys
     required_keys = ["th_min", "th_max", "th_num", "ph_min", "ph_max", "ph_num"]
     missing = [k for k in required_keys if k not in data]
     if missing:
@@ -70,7 +89,7 @@ def load_drp_config(path: Path) -> DRPConfig:
         theta_slice=data.get("theta_slice", 1),
         data_serial=data.get("data_serial"),
     )
-    cfg.validate()
+    cfg.validate() # Check for validity
     return cfg
 
 
@@ -121,6 +140,7 @@ class Settings:
     load_workers: int | None = None
     config_path: str | Path | None = None
     drp: DRPConfig | None = None
+    square_crop: bool = False
 
     def __post_init__(self) -> None:
         self.data_root = Path(self.data_root)
@@ -173,4 +193,5 @@ class Settings:
             load_workers=raw.get("load_workers"),
             config_path=cfg_path,
             drp=drp_cfg,
+            square_crop=raw.get("square_crop", False),
         )
