@@ -3,7 +3,7 @@ import warnings
 
 import numpy as np
 
-from .config import CacheConfig, DRPConfig, load_drp_config, save_cache_config
+from .settings import CacheConfig, DRPConfig, load_drp_config, save_cache_config
 from .drp_compute import (
     apply_angle_slice,
     build_drp_stack,
@@ -20,6 +20,7 @@ from .image_io import (
     load_images,
 )
 from .paths import DataPaths
+from .settings import Settings
 
 
 class ImagePack:
@@ -34,23 +35,58 @@ class ImagePack:
         load_workers: int | None = None,
         subtract_background: bool = True,
         subtraction_scale_percentile: float = 99.5,
+        settings: Settings | None = None,
     ):
-        self.paths = DataPaths.from_root(data_root)
-        self.folder = resolve_image_folder(folder, self.paths)
-        self.config_path = resolve_config_path(config_path)
-        self.base_config: DRPConfig = load_drp_config(self.config_path)
+        # Prefer a single Settings object; reject mixed kwargs when provided.
+        if settings is not None:
+            overrides = any(
+                [
+                    folder is not None,
+                    img_format != "jpg",
+                    angle_slice != (1, 1),
+                    data_root != "data",
+                    config_path is not None,
+                    use_cached_stack is not True,
+                    load_workers is not None,
+                    subtract_background is not True,
+                    subtraction_scale_percentile != 99.5,
+                ]
+            )
+            if overrides:
+                raise ValueError("When providing settings, do not pass additional loader kwargs.")
+            self.settings = settings
+        else:
+            cfg_path = resolve_config_path(config_path)
+            drp_cfg = load_drp_config(cfg_path)
+            self.settings = Settings(
+                data_root=data_root,
+                folder=folder,
+                img_format=img_format,
+                angle_slice=angle_slice,
+                use_cached_stack=use_cached_stack,
+                subtract_background=subtract_background,
+                subtraction_scale_percentile=subtraction_scale_percentile,
+                load_workers=load_workers,
+                config_path=cfg_path,
+                drp=drp_cfg,
+            )
+
+        self.paths = DataPaths.from_root(self.settings.data_root)
+        self.folder = resolve_image_folder(self.settings.folder, self.paths)
+        self.config_path = self.settings.config_path or resolve_config_path(None)
+        self.base_config: DRPConfig = self.settings.drp  # type: ignore[assignment]
         self.data_serial = self.base_config.data_serial
 
         # Load raw grayscale images from disk
-        self.images = load_images(self.folder, img_format, num_workers=load_workers)
+        self.images = load_images(self.folder, self.settings.img_format, num_workers=self.settings.load_workers)
 
         # Optional brightness-invariant preprocessing: subtract blurred backgrounds
-        if subtract_background:
+        if self.settings.subtract_background:
             bg_folder = self.paths.root / "background"
             if not bg_folder.exists():
                 warnings.warn(f"Background folder not found at {bg_folder}; skipping subtraction.")
             else:
-                bg_images = load_images(bg_folder, img_format, num_workers=load_workers)
+                bg_images = load_images(bg_folder, self.settings.img_format, num_workers=self.settings.load_workers)
                 if len(bg_images) != len(self.images):
                     raise ValueError(f"Background count {len(bg_images)} does not match image count {len(self.images)}.")
                 subtracted: list[np.ndarray] = []
@@ -60,7 +96,7 @@ class ImagePack:
                     # Subtract then rescale so images share roughly consistent brightness.
                     diff = img.astype(np.float32) - bg.astype(np.float32)
                     diff = np.clip(diff, 0, None)
-                    ref = np.percentile(diff, subtraction_scale_percentile)
+                    ref = np.percentile(diff, self.settings.subtraction_scale_percentile)
                     scale = 255.0 / max(ref, 1.0)
                     diff = np.clip(diff * scale, 0, 255).astype(np.uint8)
                     subtracted.append(diff)
@@ -69,19 +105,19 @@ class ImagePack:
         self.h, self.w = self.images[0].shape
 
         # Precompute the stack shape for the requested slice to size memmap correctly
-        if self.base_config.ph_num % angle_slice[0] != 0 or self.base_config.th_num % angle_slice[1] != 0:
+        if self.base_config.ph_num % self.settings.angle_slice[0] != 0 or self.base_config.th_num % self.settings.angle_slice[1] != 0:
             raise ValueError("Angle slices must evenly divide ph_num and th_num.")
 
-        sliced_ph = self.base_config.ph_num // angle_slice[0]
-        sliced_th = self.base_config.th_num // angle_slice[1]
+        sliced_ph = self.base_config.ph_num // self.settings.angle_slice[0]
+        sliced_th = self.base_config.th_num // self.settings.angle_slice[1]
         stack_shape = (self.h, self.w, sliced_ph, sliced_th)
         self.drp_stack, cache_cfg, stack_needs_build = prepare_cache(
-            self.paths, angle_slice, stack_shape, self.data_serial
+            self.paths, self.settings.angle_slice, stack_shape, self.data_serial
         )
 
         # Use caller's slice preference; rebuild cache if it differs from what's stored.
         cache_slice = (cache_cfg.ph_slice, cache_cfg.th_slice)
-        self.angle_slice = angle_slice
+        self.angle_slice = self.settings.angle_slice
         if cache_slice != self.angle_slice:
             # Force recreation with new slice parameters
             self._close_memmap(self.drp_stack)
@@ -106,7 +142,7 @@ class ImagePack:
         self.num_images = len(self.images)
 
         expected_shape = (self.h, self.w, self.param.ph_num, self.param.th_num)
-        if self.drp_stack.shape != expected_shape or not use_cached_stack:
+        if self.drp_stack.shape != expected_shape or not self.settings.use_cached_stack:
             # Shape mismatch or caller requested rebuild: recreate stack
             self._close_memmap(self.drp_stack)
             self.drp_stack = np.memmap(

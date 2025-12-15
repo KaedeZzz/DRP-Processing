@@ -50,17 +50,14 @@ This loads grayscale images from `data/processed`, subtracts blurred backgrounds
 
 ## Core usage (library)
 ```python
-from paperdrm import ImagePack
+from paperdrm import ImagePack, Settings
 from paperdrm.drp_direction import drp_direction_map, drp_mask_angle
 
+# Centralised settings loaded from YAML; override angle_slice in code
+settings = Settings.from_yaml("exp_param.yaml").with_overrides(angle_slice=(2, 2))
+
 # Load images with optional angle down-sampling and background subtraction
-imp = ImagePack(
-    data_root="data",
-    angle_slice=(2, 2),            # take every 2nd phi/theta to cut resolution
-    img_format="jpg",
-    use_cached_stack=True,         # reuse data/cache/drp.dat when it matches config
-    subtract_background=True,      # subtracts images in data/background if present
-)
+imp = ImagePack(settings=settings)
 
 # Mean DRP over the image or from a single pixel
 mean_drp = imp.get_mean_drp()      # shape [phi, theta]

@@ -3,7 +3,7 @@ from dataclasses import replace
 import numpy as np
 from tqdm import tqdm
 
-from .config import DRPConfig
+from .settings import DRPConfig
 
 
 def slice_indices(config: DRPConfig, angle_slice: tuple[int, int]) -> np.ndarray:

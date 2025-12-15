@@ -3,14 +3,17 @@ import scipy
 from matplotlib import pyplot as plt
 import cv2
 
-from paperdrm import ImagePack
+from paperdrm import ImagePack, Settings
 from paperdrm.drp_direction import drp_direction_map, drp_mask_angle
 from paperdrm.line_detection import hough_transform, find_hough_peaks
 
 
 if __name__ == "__main__":
+    # Centralised settings loaded from YAML with a small override for angle slicing
+    settings = Settings.from_yaml("exp_param.yaml").with_overrides(angle_slice=(2, 2))
+
     # Load images + DRP (2x2 angular slice)
-    images = ImagePack(angle_slice=(2, 2), data_root="data", config_path="exp_param.yaml")
+    images = ImagePack(settings=settings)
 
     # Mean DRP plot
     ax = images.plot_drp(images.get_mean_drp(), cmap="jet")

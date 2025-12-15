@@ -6,13 +6,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from .config import (
-    CacheConfig,
-    DRPConfig,
-    load_cache_config,
-    load_drp_config,
-    save_cache_config,
-)
+from .settings import CacheConfig, DRPConfig, load_cache_config, load_drp_config, save_cache_config
 from .paths import DataPaths
 
 

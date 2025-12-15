@@ -1,7 +1,7 @@
 import numpy as np
 from matplotlib import pyplot as plt
 
-from .config import DRPConfig
+from .settings import DRPConfig
 
 
 def plot_drp(drp_array: np.ndarray, config: DRPConfig, cmap: str = "jet", project: str = "stereo", ax=None):
