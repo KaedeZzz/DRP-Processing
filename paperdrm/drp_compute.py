@@ -83,6 +83,7 @@ def drp_from_stack(stack: np.ndarray, loc: tuple[int, int]) -> np.ndarray:
 
 
 def build_drp_stack(images: list[np.ndarray], config: DRPConfig, memmap: np.memmap) -> np.memmap:
+    print("Building new DRP stack in memmap...")
     ph, th = config.ph_num, config.th_num
     if len(images) != ph * th:
         raise ValueError(f"Number of images {len(images)} does not match number of angles {ph * th}.")

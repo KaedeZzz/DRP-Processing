@@ -1,8 +1,8 @@
-data_serial: 7
+data_serial: 8
 th_min: 10
 th_max: 65
 th_num: 12
 ph_min: 0
-ph_max: 351
-ph_num: 40
+ph_max: 355
+ph_num: 72
 square_crop: True

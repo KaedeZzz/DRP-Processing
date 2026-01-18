@@ -30,7 +30,7 @@ def hough_transform(edge_image, rho_res=1, theta_res=1):
     if ys.size == 0:
         return np.zeros((num_rhos, num_thetas)), rhos, thetas
 
-    edge_vals = edge_image[ys, xs].astype(np.float64) / 255.0
+    edge_vals = edge_image[ys, xs].astype(np.float64)
 
     # Compute rho for all points and thetas at once: [N, T]
     rho_vals = xs[:, None] * cos_t[None, :] + ys[:, None] * sin_t[None, :]  # Shape: [N, T]
