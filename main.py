@@ -51,7 +51,7 @@ if __name__ == "__main__":
 
     # Downsample first, then a single Gaussian blur instead of multiple box blurs
     img = img[::2, ::2]
-    img = cv2.GaussianBlur(img, (21, 21), sigmaX=8, sigmaY=8)
+    img = cv2.GaussianBlur(img, (11, 11), sigmaX=4, sigmaY=4)
     plt.imshow(img, cmap="gray")
     plt.show()
 
@@ -63,52 +63,10 @@ if __name__ == "__main__":
     plt.ylabel("Average Intensity")
     plt.show()
 
-
-    # Hough transform
-    plt.figure(figsize=(10, 4))
-    plt.subplot(1, 1, 1)
-    plt.imshow(img, cmap='gray')
-    plt.title('Source image used for Hough')
-    plt.tight_layout()
-
-    acc, rhos, thetas = hough_transform(img, rho_res=1, theta_res=1)
-    plt.figure()
-    plt.imshow(acc, aspect='auto', cmap='inferno')
-    plt.colorbar()
-    plt.title('Hough accumulator (mean votes)')
-
-    peaks = find_hough_peaks(acc, num_peaks=5, threshold=0.1)
-    dominant = dominant_orientation_from_accumulator(acc, thetas, top_k=1)
-    theta_rad = dominant[0][0] if dominant else None
-
-    if theta_rad is not None:
-        rotated_img = rotate_image_to_orientation(img, theta_rad, target_angle_deg=0.0)
-        print(f'Rotated image by {-np.degrees(theta_rad):.1f}? to align the dominant line vertically.')
-    else:
-        rotated_img = img
-        print('No dominant orientation found; using the original image for projection.')
-
-    annotated_lines = overlay_hough_lines(rotated_img, peaks, rhos, thetas)
-    aligned_profile = rotated_img.mean(axis=0)
-    plt.figure(figsize=(14, 5))
-    plt.subplot(1, 3, 1)
-    plt.imshow(rotated_img, cmap='gray')
-    plt.title('Rotated image')
-    plt.subplot(1, 3, 2)
-    plt.imshow(annotated_lines)
-    plt.title('Hough lines overlaid')
-    plt.subplot(1, 3, 3)
-    plt.plot(aligned_profile)
-    plt.title('Column intensity profile (aligned)')
-    plt.xlabel('Pixel position')
-    plt.ylabel('Mean intensity')
-    plt.tight_layout()
-    plt.show()
-
     # Peak detection (top 13 by height) and overlay
     peaks, _ = scipy.signal.find_peaks(img_stacked)
     peaks_by_height = peaks[np.argsort(img_stacked[peaks])[::-1]]
-    keep = 13
+    keep = 25
     plt.imshow(img, cmap="gray")
     for peak in peaks_by_height[:keep]:
         plt.plot([peak, peak], [0, img.shape[0]], color="red", linewidth=1)
