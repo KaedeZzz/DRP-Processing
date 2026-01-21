@@ -82,17 +82,26 @@ def drp_from_stack(stack: np.ndarray, loc: tuple[int, int]) -> np.ndarray:
     return stack[y, x, :, :]
 
 
-def build_drp_stack(images: list[np.ndarray], config: DRPConfig, memmap: np.memmap) -> np.memmap:
-    print("Building new DRP stack in memmap...")
+def build_drp_stack(
+    images: list[np.ndarray],
+    config: DRPConfig,
+    memmap: np.memmap,
+    *,
+    verbose: bool = False,
+) -> np.memmap:
     ph, th = config.ph_num, config.th_num
     if len(images) != ph * th:
         raise ValueError(f"Number of images {len(images)} does not match number of angles {ph * th}.")
+    if verbose:
+        print(f"[DRP] building DRP stack from {len(images)} images -> shape ({ph}, {th})")
     arr = np.stack(images, axis=0, dtype=np.uint8)
     h, w = arr.shape[1:]
     # Build a contiguous phi/theta-first view then move axes once when copying to the memmap.
     phi_theta_view = arr.reshape((ph, th, h, w))
     np.copyto(memmap, np.moveaxis(phi_theta_view, (0, 1), (2, 3)))
     memmap.flush()
+    if verbose:
+        print("[DRP] DRP stack build complete and flushed to disk")
     return memmap
 
 

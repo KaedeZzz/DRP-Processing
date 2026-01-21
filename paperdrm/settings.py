@@ -141,6 +141,7 @@ class Settings:
     config_path: str | Path | None = None
     drp: DRPConfig | None = None
     square_crop: bool = False
+    verbose: bool = False
 
     def __post_init__(self) -> None:
         self.data_root = Path(self.data_root)
@@ -194,4 +195,5 @@ class Settings:
             config_path=cfg_path,
             drp=drp_cfg,
             square_crop=raw.get("square_crop", False),
+            verbose=raw.get("verbose", False),
         )

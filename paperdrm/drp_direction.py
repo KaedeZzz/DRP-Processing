@@ -20,11 +20,13 @@ def get_drp_direction(drp_mat: np.ndarray, ph_num: int, attenuation: float = 1.0
     return np.array([x, y])
 
 
-def drp_direction_map(imp: "ImagePack", display: bool = True):
+def drp_direction_map(imp: "ImagePack", display: bool = True, verbose: bool = False):
     """
     Calculate (and optionally display) the direction map of a DRP over all pixels.
     Returns magnitude and angle maps.
     """
+    if verbose:
+        print("[DRP] computing DRP direction map")
     h, w = imp.h, imp.w
     phi_vec = np.mean(imp.drp_stack, axis=3)  # [h, w, ph_num]
     mean_mat = np.mean(phi_vec, axis=2, keepdims=True)
@@ -58,10 +60,19 @@ def drp_direction_map(imp: "ImagePack", display: bool = True):
         fig.colorbar(im3, ax=axes[2])
         plt.show()
 
+    if verbose:
+        print(f"[DRP] direction map computed; mag_map range=({norm_mag_map.min():.3f}, {norm_mag_map.max():.3f})")
     return norm_mag_map, deg_map
 
 
-def drp_mask_angle(mag_map: np.ndarray, deg_map: np.ndarray, orientation: float, threshold: float) -> np.ndarray:
+def drp_mask_angle(
+    mag_map: np.ndarray,
+    deg_map: np.ndarray,
+    orientation: float,
+    threshold: float,
+    *,
+    verbose: bool = False,
+) -> np.ndarray:
     """
     Create a mask highlighting pixels with DRP orientations around a designated direction.
     Mask values are magnitude-weighted in [0,1].
@@ -74,6 +85,9 @@ def drp_mask_angle(mag_map: np.ndarray, deg_map: np.ndarray, orientation: float,
     # Smallest angular difference to target orientation in degrees
     angle_diff = np.abs(((deg_map - orientation + 180) % 360) - 180)
     mask = angle_diff <= threshold
+    if verbose:
+        keep_pct = 100 * np.mean(mask)
+        print(f"[DRP] mask around {orientation}±{threshold} keeps {keep_pct:.1f}% of pixels")
     return norm_mag_map * mask
 
 

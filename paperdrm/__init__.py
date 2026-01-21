@@ -3,3 +3,4 @@ from .drp_direction import *
 from .drp_analysis import *
 from .roi import *
 from .settings import Settings
+from .spectral_tv import *

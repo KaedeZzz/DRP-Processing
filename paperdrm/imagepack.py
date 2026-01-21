@@ -36,6 +36,7 @@ class ImagePack:
         subtract_background: bool = True,
         subtraction_scale_percentile: float = 99.5,
         square_crop: bool = False,
+        verbose: bool | None = None,
         settings: Settings | None = None,
     ):
         # Prefer a single Settings object; reject mixed kwargs when provided.
@@ -52,6 +53,7 @@ class ImagePack:
                     subtract_background is not True,
                     subtraction_scale_percentile != 99.5,
                     square_crop is not False,
+                    verbose is not None,
                 ]
             )
             if overrides:
@@ -72,16 +74,21 @@ class ImagePack:
                 config_path=cfg_path,
                 drp=drp_cfg,
                 square_crop=square_crop,
+                verbose=verbose if verbose is not None else False,
             )
 
+        self.verbose = self.settings.verbose
         self.paths = DataPaths.from_root(self.settings.data_root)
         self.folder = resolve_image_folder(self.settings.folder, self.paths)
         self.config_path = self.settings.config_path or resolve_config_path(None)
         self.base_config: DRPConfig = self.settings.drp  # type: ignore[assignment]
         self.data_serial = self.base_config.data_serial
+        self._log(f"Initialising ImagePack with data_root={self.paths.root} folder={self.folder}")
 
         # Load raw grayscale images from disk
+        self._log(f"Loading images ({self.settings.img_format}) from {self.folder}")
         self.images = load_images(self.folder, self.settings.img_format, num_workers=self.settings.load_workers)
+        self._log(f"Loaded {len(self.images)} images; first image shape {self.images[0].shape}")
 
         # Optional brightness-invariant preprocessing: subtract blurred backgrounds
         if self.settings.subtract_background:
@@ -89,6 +96,7 @@ class ImagePack:
             if not bg_folder.exists():
                 warnings.warn(f"Background folder not found at {bg_folder}; skipping subtraction.")
             else:
+                self._log(f"Subtracting backgrounds from {bg_folder}")
                 bg_images = load_images(bg_folder, self.settings.img_format, num_workers=self.settings.load_workers)
                 if len(bg_images) != len(self.images):
                     raise ValueError(f"Background count {len(bg_images)} does not match image count {len(self.images)}.")
@@ -106,6 +114,7 @@ class ImagePack:
                 self.images = subtracted
         if self.settings.square_crop:
             self.images = self._crop_to_square(self.images)
+            self._log(f"Applied square crop -> new shape {self.images[0].shape}")
         self.num_images = len(self.images)
         self.h, self.w = self.images[0].shape
 
@@ -116,6 +125,7 @@ class ImagePack:
         sliced_ph = self.base_config.ph_num // self.settings.angle_slice[0]
         sliced_th = self.base_config.th_num // self.settings.angle_slice[1]
         stack_shape = (self.h, self.w, sliced_ph, sliced_th)
+        self._log(f"Preparing cache for angle_slice={self.settings.angle_slice} stack_shape={stack_shape}")
         self.drp_stack, cache_cfg, stack_needs_build = prepare_cache(
             self.paths, self.settings.angle_slice, stack_shape, self.data_serial
         )
@@ -125,6 +135,7 @@ class ImagePack:
         self.angle_slice = self.settings.angle_slice
         if cache_slice != self.angle_slice:
             # Force recreation with new slice parameters
+            self._log(f"Cache slice {cache_slice} != requested {self.angle_slice}; recreating memmap")
             self._close_memmap(self.drp_stack)
             self.drp_stack = np.memmap(
                 self.paths.cache / "drp.dat",
@@ -145,10 +156,13 @@ class ImagePack:
         # Apply slicing to images and config
         self.images, self.param = apply_angle_slice(self.images, self.base_config, self.angle_slice)
         self.num_images = len(self.images)
+        self._log(f"Applied angle slice -> ph_num={self.param.ph_num}, th_num={self.param.th_num}")
 
         expected_shape = (self.h, self.w, self.param.ph_num, self.param.th_num)
         if self.drp_stack.shape != expected_shape or not self.settings.use_cached_stack:
             # Shape mismatch or caller requested rebuild: recreate stack
+            reason = "shape mismatch" if self.drp_stack.shape != expected_shape else "use_cached_stack=False"
+            self._log(f"Recreating DRP memmap due to {reason}; expected {expected_shape}, found {self.drp_stack.shape}")
             self._close_memmap(self.drp_stack)
             self.drp_stack = np.memmap(
                 self.paths.cache / "drp.dat",
@@ -167,7 +181,9 @@ class ImagePack:
             stack_needs_build = True
 
         if stack_needs_build:
-            build_drp_stack(self.images, self.param, self.drp_stack)
+            self._log("Building DRP stack into cache")
+            build_drp_stack(self.images, self.param, self.drp_stack, verbose=self.verbose)
+        self._log("ImagePack initialisation complete")
 
     def __iter__(self):
         return iter((self.images, self.param))
@@ -180,6 +196,10 @@ class ImagePack:
     def mask_images(self, mask: np.ndarray, normalize: bool = False):
         self.images = compute_mask_images(self.images, mask, normalize)
         return self.images
+
+    def _log(self, message: str) -> None:
+        if self.verbose:
+            print(f"[ImagePack] {message}")
 
     def _crop_to_square(self, images: list[np.ndarray]) -> list[np.ndarray]:
         h, w = images[0].shape
